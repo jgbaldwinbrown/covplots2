@@ -1,6 +1,7 @@
 package covplots
 
 import (
+	"strings"
 	"strconv"
 	"regexp"
 	"bufio"
@@ -25,6 +26,77 @@ plfmt_flex -c 0 -b 1 -b2 2 -C %v -n > %v
 )
 
 	return shellout.ShellOutPiped(script, r, os.Stdout, os.Stderr)
+}
+
+type PlfmtEntry struct {
+	Chr string
+	Start int
+	End int
+	Text string
+	Line []string
+	ChrNum int
+	StartOff int
+	EndOff int
+}
+
+func PlfmtSmall(r io.Reader, outpre string) error {
+	w, err := os.Create(outpre + "_plfmt.bed")
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+	bw := bufio.NewWriter(w)
+	defer bw.Flush()
+
+	data := []PlfmtEntry{}
+	s := bufio.NewScanner(r)
+	s.Buffer([]byte{}, 1e12)
+	chrlens := make(map[string]int)
+	chrs := []string{}
+
+	for s.Scan() {
+		line := strings.Split(s.Text(), "\t")
+		if len(line) < 3 {
+			continue
+		}
+		start, err := strconv.ParseInt(line[1], 0, 64)
+		if err != nil {
+			continue
+		}
+		end, err := strconv.ParseInt(line[2], 0, 64)
+		if err != nil {
+			continue
+		}
+		entry := PlfmtEntry{Chr: line[0], Start: int(start), End: int(end), Text: s.Text(), Line: line}
+		length, ok := chrlens[entry.Chr]
+		if !ok {
+			chrlens[entry.Chr] = 0
+			length = 0
+			chrs = append(chrs, entry.Chr)
+		}
+		if entry.End > length {
+			chrlens[entry.Chr] = entry.End
+		}
+		data = append(data, entry)
+	}
+	offsets := []int{0}
+	chrnums := make(map[string]int)
+	chrnums[chrs[0]] = 0
+	chroffs := make(map[string]int)
+	chroffs[chrs[0]] = 0
+	for i:=1; i<len(chrs); i++ {
+		chr := chrs[i]
+		offsets = append(offsets, offsets[i-1] + chrlens[chrs[i-1]])
+		chrnums[chr] = i
+		chroffs[chr] = offsets[i]
+	}
+	for _, e := range data {
+		e.StartOff = chroffs[e.Chr] + e.Start
+		e.EndOff = chroffs[e.Chr] + e.End
+		e.ChrNum = chrnums[e.Chr]
+		fmt.Fprintf(bw, "%s\t%d\t%d\t%d\n", e.Text, e.ChrNum, e.StartOff, e.EndOff)
+	}
+	return nil
 }
 
 func PlotSingle(outpre string) error {
@@ -72,10 +144,6 @@ func GetFlags() Flags {
 	flag.IntVar(&f.End, "e", -1, "End coordinate to plot")
 	flag.Parse()
 
-	if f.Chrbedpath == "" {
-		panic(fmt.Errorf("missing chrbedpath"))
-	}
-
 	return f
 }
 
@@ -98,7 +166,7 @@ func (f *Filterer) Read(out []byte) (n int, err error) {
 		n2, err = f.buf.Read(out[n:])
 		n += n2
 	}
-	fmt.Printf("writing %v chars\n", n)
+	// fmt.Printf("writing %v chars\n", n)
 	return n, err
 }
 
@@ -152,7 +220,7 @@ func Filter(r io.Reader, chr string, start, end int) (*Filterer, error) {
 			}
 		}
 
-		fmt.Println("matched")
+		// fmt.Println("matched")
 		return true
 	}
 	return f, nil
@@ -166,7 +234,7 @@ func RunSingle() {
 		panic(err)
 	}
 
-	err = Plfmt(r, f.Outpre, f.Chrbedpath)
+	err = PlfmtSmall(r, f.Outpre)
 	if err != nil {
 		panic(err)
 	}
