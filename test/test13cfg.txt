@@ -1,0 +1,2 @@
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg	chrlens.txt	test12out/ixwf_minus_ixaf_out	/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixaf_coverage.bg
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixlf_coverage.txt	chrlens.txt	test12out/ixlf_minus_ixwf_out	/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg

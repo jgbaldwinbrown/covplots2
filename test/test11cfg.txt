@@ -1,0 +1,15 @@
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/a4_coverage.bg	chrlens.txt	test11out/a4_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/axwm_coverage.bg	chrlens.txt	test11out/axwm_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/hmr_coverage.bg	chrlens.txt	test11out/hmr_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/hxwm_coverage.bg	chrlens.txt	test11out/hxwm_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/iso1_coverage.bg	chrlens.txt	test11out/iso1_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixaf_coverage.bg	chrlens.txt	test11out/ixaf_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixam_coverage.bg	chrlens.txt	test11out/ixam_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixlf_coverage.txt	chrlens.txt	test11out/ixlf_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixlm_coverage.bg	chrlens.txt	test11out/ixlm_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg	chrlens.txt	test11out/ixwf_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwm_coverage.bg	chrlens.txt	test11out/ixwm_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/lhr_coverage.txt	chrlens.txt	test11out/lhr_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/w5o1_coverage.bg	chrlens.txt	test11out/w5o1_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/wxd1_coverage.bg	chrlens.txt	test11out/wxd1_out
+/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/wxw_coverage.bg	chrlens.txt	test11out/wxw_out

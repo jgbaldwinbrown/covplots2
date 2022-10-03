@@ -79,6 +79,11 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 		}
 		data = append(data, entry)
 	}
+
+	if len(chrs) < 1 {
+		return nil
+	}
+
 	offsets := []int{0}
 	chrnums := make(map[string]int)
 	chrnums[chrs[0]] = 0
@@ -229,17 +234,7 @@ func Filter(r io.Reader, chr string, start, end int) (*Filterer, error) {
 func RunSingle() {
 	f := GetFlags()
 
-	r, err := Filter(os.Stdin, f.Chr, f.Start, f.End)
-	if err != nil {
-		panic(err)
-	}
-
-	err = PlfmtSmall(r, f.Outpre)
-	if err != nil {
-		panic(err)
-	}
-
-	err = PlotSingle(f.Outpre)
+	err := SinglePlot(os.Stdin, f.Outpre, f.Chr, f.Start, f.End)
 	if err != nil {
 		panic(err)
 	}
