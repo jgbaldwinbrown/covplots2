@@ -14,7 +14,7 @@ main <- function() {
 	cov = read_bed_cov(cov_path, FALSE)
 	cov$color = nothreshcolor(cov, "CHR")
 
-	plot_cov(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov))
+	plot_cov_sub(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov))
 }
 
 main()

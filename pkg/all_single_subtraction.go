@@ -148,7 +148,7 @@ func Subtract(r1, r2 io.Reader) (*strings.Reader, error) {
 
 	var out strings.Builder
 	for pos, val := range sub {
-		fmt.Fprintf(&out, "%s\t%d\t%d\t%d\n", pos.Chr, pos.Bp, pos.Bp+1, val)
+		fmt.Fprintf(&out, "%s\t%d\t%d\t%f\n", pos.Chr, pos.Bp, pos.Bp+1, val)
 	}
 	return strings.NewReader(out.String()), nil
 }
@@ -174,7 +174,7 @@ func SubtractSinglePlot(r1, r2 io.Reader, outpre, chr string, start, end int) er
 		return err
 	}
 
-	err = PlotSingle(outpre)
+	err = PlotSingle(outpre, true)
 	if err != nil {
 		return err
 	}

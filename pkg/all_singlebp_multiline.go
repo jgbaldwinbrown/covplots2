@@ -22,8 +22,14 @@ func GetAllMultiplotFlags() AllSingleFlags {
 }
 
 func RunAllMultiplot() {
+	fmt.Println("one")
 	f := GetAllMultiplotFlags()
+	fmt.Println(f)
 	cfg, err := GetUltimateConfig(f.Config)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(cfg)
 
 	err = AllMultiplotParallel(cfg, f.WinSize, f.WinStep, f.Threads)
 	if err != nil {
@@ -31,8 +37,8 @@ func RunAllMultiplot() {
 	}
 }
 
-func FilterMulti(chr string, start, end int, rs ...io.Reader) ([]*Filterer, error) {
-	var out []*Filterer
+func FilterMulti(chr string, start, end int, rs ...io.Reader) ([]io.Reader, error) {
+	var out []io.Reader
 	for _, r := range rs {
 		fr, err := Filter(r, chr, start, end)
 		if err != nil {
@@ -44,36 +50,41 @@ func FilterMulti(chr string, start, end int, rs ...io.Reader) ([]*Filterer, erro
 }
 
 func CombineSinglebpPlots(names []string, rs ...io.Reader) (*strings.Reader, error) {
+	fmt.Printf("len(rs): %v; names: %v\n", len(rs), names)
 	var out strings.Builder
 	for i, r := range rs {
 		s := bufio.NewScanner(r)
 		s.Buffer([]byte{}, 1e12)
+		nlines := 0
 		for s.Scan() {
 			fmt.Fprintf(&out, "%s\t%s\n", s.Text(), names[i])
+			nlines++
 		}
+		fmt.Printf("rs[%v] nlines: %v\n", i, nlines)
 	}
 	return strings.NewReader(out.String()), nil
 }
 
-func PlotMulti(outpre string, toplot io.Reader) error {
+func PlotMulti(outpre string) error {
 	script := fmt.Sprintf(
 		`#!/bin/bash
 set -e
 
 plot_singlebp_multiline_cov %v %v
 `,
-		fmt.Sprintf("%v_multi_plfmt.bed", outpre),
-		fmt.Sprintf("%v_multi_plotted.png", outpre),
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
 	)
 
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func Nop(string, []io.Reader, []string, any) error {return nil}
+func Nop([]io.Reader, any) (io.Reader, error) {return nil, nil}
 
-func GetFunc(fstr string) func(string, []io.Reader, []string, any) error {
+func GetFunc(fstr string) func(rs []io.Reader, args any) (io.Reader, error) {
 	switch fstr {
-	case "subtract_some": return SubtractSome
+	case "subtract_two": return SubtractTwo
+	case "unchanged": return Unchanged
 	default: return Nop
 	}
 	return Nop
@@ -84,7 +95,7 @@ func OpenPaths(paths ...string) ([]io.Reader, error) {
 	for _, path := range paths {
 		r, err := os.Open(path)
 		if err != nil {
-			CloseFiles(out...)
+			CloseReaders(out...)
 			return nil, err
 		}
 		out = append(out, r)
@@ -92,30 +103,72 @@ func OpenPaths(paths ...string) ([]io.Reader, error) {
 	return out, nil
 }
 
-func CloseFiles(files ...io.Reader) {
-	for _, f := range files {
-		if c, ok := f.(io.Closer); ok {
+func CloseReaders(files ...io.Reader) {
+	for _, r := range files {
+		if c, ok := r.(io.Closer); ok {
 			c.Close()
 		}
 	}
 }
 
-func Multiplot(
+func CloseFiles(files ...io.Closer) {
+	for _, c := range files {
+		c.Close()
+	}
+}
 
-func MultiplotInputSet(outpre string, cfg InputSet, chr string, start, end int) error {
+func MultiplotInputSet(cfg InputSet, chr string, start, end int) (io.Reader, []io.Closer, error) {
 	f := GetFunc(cfg.Function)
 	rs, err := OpenPaths(cfg.Paths...)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer CloseFiles(rs...)
+	var closers []io.Closer
+	for _, r := range rs {
+		closers = append(closers, r.(io.Closer))
+	}
 
 	frs, err := FilterMulti(chr, start, end, rs...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	readers, err := f(frs, cfg.FunctionArgs)
+	return readers, closers, err
+}
+
+func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
+	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
+	var rs []io.Reader
+	for _, set := range cfg.InputSets {
+		r, closers, err := MultiplotInputSet(set, chr, start, end)
+		if err != nil {
+			return err
+		}
+		defer CloseFiles(closers...)
+		rs = append(rs, r)
+	}
+
+	var names []string
+	for _, set := range cfg.InputSets {
+		names = append(names, set.Name)
+	}
+
+	combined, err := CombineSinglebpPlots(names, rs...)
 	if err != nil {
 		return err
 	}
 
-	return f(cfg.Outpre, frs, cfg.Names, cfg.FunctionArgs)
+	err = PlfmtSmall(combined, outpre)
+	if err != nil {
+		return err
+	}
+
+	err = PlotMulti(outpre, )
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func ParseSubArgs(args any) ([][]int, error) {
@@ -145,47 +198,22 @@ func ParseSubArgs(args any) ([][]int, error) {
 	return out, nil
 }
 
-func SubtractTwo(outpre string, rs []io.Reader, names []string, args any) error {
-	sargs, err := ParseSubArgs(args)
+func SubtractTwo(rs []io.Reader, args any) (io.Reader, error) {
+	newreader, err := Subtract(rs[0], rs[1])
 	if err != nil {
-		return fmt.Errorf("SubtractSome: %w", err)
+		return nil, fmt.Errorf("SubtractSome: %w", err)
 	}
-	var to_combine []io.Reader
-	var newnames []string
-	used := make(map[int]struct{})
-	for _, entry := range sargs {
-		newreader, err := Subtract(rs[entry[0]], rs[entry[1]])
-		if err != nil {
-			return fmt.Errorf("SubtractSome: %w", err)
-		}
-
-		newnames = append(newnames, fmt.Sprintf("%v-%v", names[entry[0]], names[entry[1]]))
-
-		to_combine = append(to_combine, newreader)
-		used[entry[0]] = struct{}{}
-		used[entry[1]] = struct{}{}
-	}
-	for i, r := range rs {
-		if _, ok := used[i]; !ok {
-			to_combine = append(to_combine, r)
-			newnames = append(newnames, names[i])
-		}
-	}
-
-	combined, err := CombineSinglePlots(newnames, to_combine...)
-	if err != nil {
-		return fmt.Errorf("SubtractSome: %w", err)
-	}
-
-	err := PlotMulti(outpre, combined)
-	if err != nil {
-		return fmt.Errorf("SubtractSome: %w", err)
-	}
-
-	return nil
+	return newreader, nil
 }
 
-func MultiplotSlide(cfg UltimateConfig, chr string, winsize, winstep int) error {
+func Unchanged(rs []io.Reader, args any) (io.Reader, error) {
+	if len(rs) != 1 {
+		return nil, fmt.Errorf("Unchanged: wrong number of paths (%v)", len(rs))
+	}
+	return rs[0], nil
+}
+
+func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
 	chrlens, err := GetChrLens(cfg.Chrlens)
 	if err != nil {
 		return fmt.Errorf("MultiplotSlide: %w", err)
@@ -205,8 +233,8 @@ func MultiplotSlide(cfg UltimateConfig, chr string, winsize, winstep int) error 
 	return nil
 }
 
-func AllMultiplotParallel(cfgs UltimateConfig, winsize, winstep, threads int) error {
-	jobs := make(chan Config, len(cfgs))
+func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int) error {
+	jobs := make(chan UltimateConfig, len(cfgs))
 	for _, cfg := range cfgs {
 		jobs <- cfg
 	}

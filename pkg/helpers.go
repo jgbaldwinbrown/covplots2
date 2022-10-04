@@ -52,6 +52,7 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 	s := bufio.NewScanner(r)
 	s.Buffer([]byte{}, 1e12)
 	chrlens := make(map[string]int)
+	chrmins := make(map[string]int)
 	chrs := []string{}
 
 	for s.Scan() {
@@ -77,6 +78,16 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 		if entry.End > length {
 			chrlens[entry.Chr] = entry.End
 		}
+
+		min, ok := chrmins[entry.Chr]
+		if !ok {
+			chrmins[entry.Chr] = entry.Start
+			min = entry.Start
+		}
+		if min > entry.Start {
+			chrmins[entry.Chr] = entry.Start
+		}
+
 		data = append(data, entry)
 	}
 
@@ -84,16 +95,26 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 		return nil
 	}
 
-	offsets := []int{0}
+	bpused := []int{chrlens[chrs[0]] - chrmins[chrs[0]]}
 	chrnums := make(map[string]int)
 	chrnums[chrs[0]] = 0
 	chroffs := make(map[string]int)
-	chroffs[chrs[0]] = 0
+	chroffs[chrs[0]] = -chrmins[chrs[0]]
+
+	/*
+	idx	start	end	fstart	fend	offset
+	0	5	30	0	25	-5
+	1	15	20	25	30	25 - 15
+	2	2	4	30	32	30 - 2
+	*/
+
 	for i:=1; i<len(chrs); i++ {
 		chr := chrs[i]
-		offsets = append(offsets, offsets[i-1] + chrlens[chrs[i-1]])
 		chrnums[chr] = i
-		chroffs[chr] = offsets[i]
+
+		bpused = append(bpused, bpused[i-1] + chrlens[chr] - chrmins[chr])
+		// offsets = append(offsets, offsets[i-1] + chrlens[chrs[i-1]] - chrmins[chrs[i-1] - chrmins[chrs[i]])
+		chroffs[chr] = bpused[i-1] - chrmins[chr]
 	}
 	for _, e := range data {
 		e.StartOff = chroffs[e.Chr] + e.Start
@@ -104,13 +125,18 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 	return nil
 }
 
-func PlotSingle(outpre string) error {
+func PlotSingle(outpre string, subtract bool) error {
+	subtxt := ""
+	if subtract {
+		subtxt = "_sub"
+	}
 	script := fmt.Sprintf(
 		`#!/bin/bash
 set -e
 
-plot_single_cov %v %v
+plot%s_single_cov %v %v
 `,
+		subtxt,
 		fmt.Sprintf("%v_plfmt.bed", outpre),
 		fmt.Sprintf("%v_plotted.png", outpre),
 	)
@@ -188,44 +214,34 @@ func Filter(r io.Reader, chr string, start, end int) (*Filterer, error) {
 	var line []string
 	splitter := lscan.ByByte('\t')
 	f.filt = func(s string) bool {
-		// fmt.Println("matching")
 		line = lscan.SplitByFunc(line, s, splitter)
 		if len(line) < 3 {
-			// fmt.Println("too short")
 			return false
 		}
 		if !re.MatchString(line[0]) {
-			// fmt.Println("wrong chr")
 			return false
 		}
 
 		if end != -1 {
-			// fmt.Println("checking end")
 			lstart, err := strconv.ParseInt(line[1], 0, 64)
 			if err != nil {
-				// fmt.Println("couldn't parse start")
 				return false
 			}
 			if int(lstart) >= end {
-				// fmt.Println("lstart >= end")
 				return false
 			}
 		}
 
 		if start != -1 {
-			// fmt.Println("checking start")
 			lend, err := strconv.ParseInt(line[2], 0, 64)
 			if err != nil {
-				// fmt.Println("couldn't parse end")
 				return false
 			}
 			if int(lend) <= start {
-				// fmt.Println("lend <= start")
 				return false
 			}
 		}
 
-		// fmt.Println("matched")
 		return true
 	}
 	return f, nil

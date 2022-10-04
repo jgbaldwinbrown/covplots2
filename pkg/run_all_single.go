@@ -14,6 +14,7 @@ type AllSingleFlags struct {
 	Config string
 	WinSize int
 	WinStep int
+	Threads int
 }
 
 func GetAllSingleFlags() AllSingleFlags {
@@ -37,7 +38,7 @@ func SinglePlot(r io.Reader, outpre, chr string, start, end int) error {
 		return err
 	}
 
-	err = PlotSingle(outpre)
+	err = PlotSingle(outpre, false)
 	if err != nil {
 		return err
 	}

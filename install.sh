@@ -17,4 +17,8 @@ cp scripts/full_single_cov_plot ~/mybin/full_single_cov_plot
 chmod +x ~/mybin/full_single_cov_plot
 cp scripts/plot_single_cov.R ~/mybin/plot_single_cov
 chmod +x ~/mybin/plot_single_cov
+cp scripts/plot_sub_single_cov.R ~/mybin/plot_sub_single_cov
+chmod +x ~/mybin/plot_sub_single_cov
+cp scripts/plot_singlebp_multiline_cov.R ~/mybin/plot_singlebp_multiline_cov
+chmod +x ~/mybin/plot_singlebp_multiline_cov
 cp scripts/plot_cov_helpers.R ~/rlibs

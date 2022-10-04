@@ -1,0 +1,59 @@
+[
+	{
+		"inputsets": [
+			{
+				"paths":[
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg",
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixaf_coverage.bg"
+				],
+				"name": "ixwf_minus_ixaf",
+				"function": "subtract_two"
+			},
+			{
+				"paths":[
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg"
+				],
+				"name": "ixwf",
+				"function": "unchanged"
+			},
+			{
+				"paths":[
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixaf_coverage.bg"
+				],
+				"name": "ixaf",
+				"function": "unchanged"
+			}
+		],
+		"chrlens": "chrlens.txt",
+		"outpre": "test16out/ixwf_minus_ixaf_out"
+	},
+
+	{
+		"inputsets": [
+			{
+				"paths":[
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixlf_coverage.txt",
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg"
+				],
+				"name": "ixlf_minus_ixwf",
+				"function": "subtract_two"
+			},
+			{
+				"paths":[
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixlf_coverage.txt"
+				],
+				"name": "ixlf",
+				"function": "unchanged"
+			},
+			{
+				"paths":[
+					"/media/jgbaldwinbrown/jim_work1/melements/cheetah_output/single_coverage/ixwf_coverage.bg"
+				],
+				"name": "ixwf",
+				"function": "unchanged"
+			}
+		],
+		"chrlens": "chrlens.txt",
+		"outpre": "test16out/ixlf_minus_ixwf_out"
+	}
+]

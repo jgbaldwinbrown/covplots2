@@ -57,7 +57,42 @@ read_bed <- function(inpath, nlog) {
 # FST win is in bed format
 read_bed_cov <- function(inpath, nlog) {
 	giant = as.data.frame(fread(inpath), header=FALSE)
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			numeric(),
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
 	colnames(giant) = c("chrom", "BP1", "BP", "VAL", "CHR", "cumsum.tmp", "cumsum.tmp2")
+	if (nlog) {
+		giant$VAL = -log10(giant$VAL)
+	}
+	return(giant)
+}
+
+# FST win is in bed format
+read_bed_cov_named <- function(inpath, nlog) {
+	giant = as.data.frame(fread(inpath), header=FALSE)
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
+	colnames(giant) = c("chrom", "BP1", "BP", "VAL", "NAME", "CHR", "cumsum.tmp", "cumsum.tmp2")
 	if (nlog) {
 		giant$VAL = -log10(giant$VAL)
 	}
@@ -109,6 +144,10 @@ read_selec <- function(inpath) {
 
 calc_chrom_labels <- function(giant) {
 	medians <- giant %>% dplyr::group_by(CHR) %>% dplyr::summarise(median.x = median(cumsum.tmp))
+}
+
+calc_chrom_labels_string <- function(giant) {
+	medians <- giant %>% dplyr::group_by(chrom) %>% dplyr::summarise(median.x = median(cumsum.tmp))
 }
 
 calc_thresh <- function(data, colname, thresh, na.rm) {
@@ -291,7 +330,7 @@ plot_cov <- function(data, path, width, height, res_scale, medians) {
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		a = ggplot(data = data) +
 		geom_point(aes(x = cumsum.tmp, y = VAL, color = color)) +
-		scale_x_continuous(breaks = medians$median.x, labels = medians$CHR) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
 		guides(colour=FALSE) +
 		xlab("Chromosome") +
 		ylab("Raw coverage") +
@@ -302,3 +341,35 @@ plot_cov <- function(data, path, width, height, res_scale, medians) {
 		print(a)
 	dev.off()
 }
+
+plot_cov_sub <- function(data, path, width, height, res_scale, medians) {
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = cumsum.tmp, y = VAL, color = color)) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		guides(colour=FALSE) +
+		xlab("Chromosome") +
+		ylab("Raw coverage") +
+		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
+		ylim(-300,300) +
+		theme_bw() + 
+		theme(text = element_text(size=24))
+		print(a)
+	dev.off()
+}
+
+plot_cov_multi <- function(data, path, width, height, res_scale, medians) {
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab("Chromosome") +
+		ylab("Raw coverage") +
+		scale_color_discrete(name = "Dataset")+
+		ylim(-300,300) +
+		theme_bw() + 
+		theme(text = element_text(size=24))
+		print(a)
+	dev.off()
+}
+		#scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"), name = "Dataset")+

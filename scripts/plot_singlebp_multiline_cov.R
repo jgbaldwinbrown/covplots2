@@ -11,10 +11,9 @@ main <- function() {
 	cov_path = args[1]
 	out_path = args[2]
 
-	cov = read_bed_cov(cov_path, FALSE)
-	cov$color = nothreshcolor(cov, "CHR")
+	cov = read_bed_cov_named(cov_path, FALSE)
 
-	plot_cov(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov))
+	plot_cov_multi(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov))
 }
 
 main()

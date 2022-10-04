@@ -1,20 +1,21 @@
 package covplots
 
 import (
+	"os"
 	"io"
 	"encoding/json"
 )
 
 type InputSet struct {
 	Paths []string `json:"paths"`
-	Names []string `json:"names"`
+	Name string `json:"name"`
 	Function string `json:"function"`
 	FunctionArgs any `json: "functionargs"`
 	Extra any `json: "extra"`
 }
 
 type UltimateConfig struct {
-	InputSets []InputSet
+	InputSets []InputSet `json:"inputsets"`
 	Chrlens string `json:"chrlens"`
 	Outpre string `json:"outpre"`
 }
@@ -33,6 +34,9 @@ func ReadUltimateConfig(r io.Reader) ([]UltimateConfig, error) {
 }
 
 func GetUltimateConfig(path string) ([]UltimateConfig, error) {
+	if path == "" {
+		return ReadUltimateConfig(os.Stdin)
+	}
 	r, err := os.Open(path)
 	if err != nil {
 		panic(err)
