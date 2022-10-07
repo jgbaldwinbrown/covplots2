@@ -17,13 +17,14 @@
 			},
 			{
 				"paths":[
-					"ixw_hits_1kb_named.bedgraph"
+					"ixw_hits_1kb_named_rechr.bed"
 				],
 				"name": "ixw_hic",
 				"function": "normalize"
 			}
 		],
 		"chrlens": "chrlens.txt",
-		"outpre": "test17out/ixw_hic_out"
+		"outpre": "test19out/ixw_hic_out",
+		"ylim": [-8.0, 8.0]
 	}
 ]

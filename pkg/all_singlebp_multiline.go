@@ -1,6 +1,9 @@
 package covplots
 
 import (
+	"math"
+	"github.com/montanaflynn/stats"
+	"strconv"
 	"github.com/jgbaldwinbrown/shellout/pkg"
 	"strings"
 	"io"
@@ -65,15 +68,17 @@ func CombineSinglebpPlots(names []string, rs ...io.Reader) (*strings.Reader, err
 	return strings.NewReader(out.String()), nil
 }
 
-func PlotMulti(outpre string) error {
+func PlotMulti(outpre string, ylim []float64) error {
 	script := fmt.Sprintf(
 		`#!/bin/bash
 set -e
 
-plot_singlebp_multiline_cov %v %v
+plot_singlebp_multiline_cov %v %v %v %v
 `,
 		fmt.Sprintf("%v_plfmt.bed", outpre),
 		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
 	)
 
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
@@ -85,6 +90,7 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) (io.Reader, error) {
 	switch fstr {
 	case "subtract_two": return SubtractTwo
 	case "unchanged": return Unchanged
+	case "normalize": return Normalize
 	default: return Nop
 	}
 	return Nop
@@ -164,7 +170,11 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 		return err
 	}
 
-	err = PlotMulti(outpre, )
+	ylim := []float64{-300,300}
+	if cfg.Ylim != nil {
+		ylim = cfg.Ylim
+	}
+	err = PlotMulti(outpre, ylim)
 	if err != nil {
 		return err
 	}
@@ -211,6 +221,61 @@ func Unchanged(rs []io.Reader, args any) (io.Reader, error) {
 		return nil, fmt.Errorf("Unchanged: wrong number of paths (%v)", len(rs))
 	}
 	return rs[0], nil
+}
+
+func NormalizeFloats(in []float64) []float64 {
+	var nanfree []float64
+	for _, f := range in {
+		if !math.IsNaN(f) {
+			nanfree = append(nanfree, f)
+		}
+	}
+	m, err := stats.Mean(nanfree)
+	if err != nil {
+		m = 0
+	}
+	s, err := stats.StdDevP(nanfree)
+	if err != nil {
+		s = 1
+	}
+	out := make([]float64, len(in))
+	for i, f := range in {
+		out[i] = (f-m) / s
+	}
+	return out
+}
+
+func Normalize(rs []io.Reader, args any) (io.Reader, error) {
+	if len(rs) != 1 {
+		return nil, fmt.Errorf("Normalize: wrong number of paths (%v)", len(rs))
+	}
+	s := bufio.NewScanner(rs[0])
+	s.Buffer([]byte{}, 1e12)
+	var lines [][]string
+	var vals []float64
+	for s.Scan() {
+		line := strings.Split(s.Text(), "\t")
+		if len(line) < 4 {
+			return nil, fmt.Errorf("Normalize: line %v has length %v < 4", line, len(line))
+		}
+		lines = append(lines, line)
+		f, err := strconv.ParseFloat(line[3], 64)
+		if err != nil {
+			f = math.NaN()
+		}
+		vals = append(vals, f)
+	}
+	vals = NormalizeFloats(vals)
+	if len(vals) != len(lines) {
+		return nil, fmt.Errorf("Normalize: len(vals) %v != len(lines) %v", len(vals), len(lines))
+	}
+
+	var out strings.Builder
+	for i, line := range lines {
+		line[3] = fmt.Sprintf("%f", vals[i])
+		fmt.Fprintln(&out, strings.Join(line, "\t"))
+	}
+	return strings.NewReader(out.String()), nil
 }
 
 func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {

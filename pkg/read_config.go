@@ -18,6 +18,7 @@ type UltimateConfig struct {
 	InputSets []InputSet `json:"inputsets"`
 	Chrlens string `json:"chrlens"`
 	Outpre string `json:"outpre"`
+	Ylim []float64 `json:"ylim"`
 }
 
 func ReadUltimateConfig(r io.Reader) ([]UltimateConfig, error) {

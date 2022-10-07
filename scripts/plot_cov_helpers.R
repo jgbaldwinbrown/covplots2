@@ -358,7 +358,11 @@ plot_cov_sub <- function(data, path, width, height, res_scale, medians) {
 	dev.off()
 }
 
-plot_cov_multi <- function(data, path, width, height, res_scale, medians) {
+plot_cov_multi <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax) {
+	print("ylimmin:")
+	print(ylimmin)
+	print("ylimmax:")
+	print(ylimmax)
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		a = ggplot(data = data) +
 		geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
@@ -366,7 +370,7 @@ plot_cov_multi <- function(data, path, width, height, res_scale, medians) {
 		xlab("Chromosome") +
 		ylab("Raw coverage") +
 		scale_color_discrete(name = "Dataset")+
-		ylim(-300,300) +
+		ylim(ylimmin, ylimmax) +
 		theme_bw() + 
 		theme(text = element_text(size=24))
 		print(a)
