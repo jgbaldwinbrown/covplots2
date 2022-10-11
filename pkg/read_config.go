@@ -9,8 +9,8 @@ import (
 type InputSet struct {
 	Paths []string `json:"paths"`
 	Name string `json:"name"`
-	Function string `json:"function"`
-	FunctionArgs any `json: "functionargs"`
+	Functions []string `json:"function"`
+	FunctionArgs []any `json: "functionargs"`
 	Extra any `json: "extra"`
 }
 

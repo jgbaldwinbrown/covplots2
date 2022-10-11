@@ -84,16 +84,24 @@ plot_singlebp_multiline_cov %v %v %v %v
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func Nop([]io.Reader, any) (io.Reader, error) {return nil, nil}
+func Nop([]io.Reader, any) ([]io.Reader, error) {return nil, nil}
 
-func GetFunc(fstr string) func(rs []io.Reader, args any) (io.Reader, error) {
+func Panic([]io.Reader, any) ([]io.Reader, error) {
+	panic(fmt.Errorf("trying to use an unimplemented function"))
+	return nil, nil
+}
+
+func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	switch fstr {
 	case "subtract_two": return SubtractTwo
 	case "unchanged": return Unchanged
 	case "normalize": return Normalize
-	default: return Nop
+	case "columns": return Columns
+	case "hic_self_cols": return HicSelfColumns
+	case "hic_pair_cols": return HicPairColumns
+	default: return Panic
 	}
-	return Nop
+	return Panic
 }
 
 func OpenPaths(paths ...string) ([]io.Reader, error) {
@@ -101,7 +109,7 @@ func OpenPaths(paths ...string) ([]io.Reader, error) {
 	for _, path := range paths {
 		r, err := os.Open(path)
 		if err != nil {
-			CloseReaders(out...)
+			CloseAny(out...)
 			return nil, err
 		}
 		out = append(out, r)
@@ -109,22 +117,16 @@ func OpenPaths(paths ...string) ([]io.Reader, error) {
 	return out, nil
 }
 
-func CloseReaders(files ...io.Reader) {
-	for _, r := range files {
-		if c, ok := r.(io.Closer); ok {
+func CloseAny[T any](ts ...T) {
+	for _, t := range ts {
+		a := any(t)
+		if c, ok := a.(io.Closer); ok {
 			c.Close()
 		}
 	}
 }
 
-func CloseFiles(files ...io.Closer) {
-	for _, c := range files {
-		c.Close()
-	}
-}
-
 func MultiplotInputSet(cfg InputSet, chr string, start, end int) (io.Reader, []io.Closer, error) {
-	f := GetFunc(cfg.Function)
 	rs, err := OpenPaths(cfg.Paths...)
 	if err != nil {
 		return nil, nil, err
@@ -136,11 +138,19 @@ func MultiplotInputSet(cfg InputSet, chr string, start, end int) (io.Reader, []i
 
 	frs, err := FilterMulti(chr, start, end, rs...)
 	if err != nil {
+		CloseAny(closers...)
 		return nil, nil, err
 	}
 
-	readers, err := f(frs, cfg.FunctionArgs)
-	return readers, closers, err
+	for i, funcstr := range cfg.Functions {
+		f := GetFunc(funcstr)
+		frs, err = f(frs, cfg.FunctionArgs[i])
+	}
+	if len(frs) != 1 {
+		CloseAny(closers...)
+		return nil, nil, fmt.Errorf("Need exactly one reader")
+	}
+	return frs[0], closers, err
 }
 
 func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
@@ -151,7 +161,7 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 		if err != nil {
 			return err
 		}
-		defer CloseFiles(closers...)
+		defer CloseAny(closers...)
 		rs = append(rs, r)
 	}
 
@@ -208,19 +218,19 @@ func ParseSubArgs(args any) ([][]int, error) {
 	return out, nil
 }
 
-func SubtractTwo(rs []io.Reader, args any) (io.Reader, error) {
+func SubtractTwo(rs []io.Reader, args any) ([]io.Reader, error) {
 	newreader, err := Subtract(rs[0], rs[1])
 	if err != nil {
 		return nil, fmt.Errorf("SubtractSome: %w", err)
 	}
-	return newreader, nil
+	return []io.Reader{newreader}, nil
 }
 
-func Unchanged(rs []io.Reader, args any) (io.Reader, error) {
+func Unchanged(rs []io.Reader, args any) ([]io.Reader, error) {
 	if len(rs) != 1 {
 		return nil, fmt.Errorf("Unchanged: wrong number of paths (%v)", len(rs))
 	}
-	return rs[0], nil
+	return rs, nil
 }
 
 func NormalizeFloats(in []float64) []float64 {
@@ -245,7 +255,8 @@ func NormalizeFloats(in []float64) []float64 {
 	return out
 }
 
-func Normalize(rs []io.Reader, args any) (io.Reader, error) {
+func Normalize(rs []io.Reader, args any) ([]io.Reader, error) {
+	fmt.Println("normalizing now")
 	if len(rs) != 1 {
 		return nil, fmt.Errorf("Normalize: wrong number of paths (%v)", len(rs))
 	}
@@ -275,7 +286,7 @@ func Normalize(rs []io.Reader, args any) (io.Reader, error) {
 		line[3] = fmt.Sprintf("%f", vals[i])
 		fmt.Fprintln(&out, strings.Join(line, "\t"))
 	}
-	return strings.NewReader(out.String()), nil
+	return []io.Reader{strings.NewReader(out.String())}, nil
 }
 
 func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
@@ -322,9 +333,11 @@ func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int) 
 			out = append(out, err)
 		}
 	}
-	if len(out) < 0 {
+	if len(out) > 0 {
 		return out
 	}
+
+	fmt.Println("done with parallel")
 	return nil
 }
 
