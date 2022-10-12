@@ -21,6 +21,7 @@ func HicSelfColumns(rs []io.Reader, args any) ([]io.Reader, error) {
 }
 
 func HicPairColumns(rs []io.Reader, args any) ([]io.Reader, error) {
+	fmt.Printf("HicPairColumns: putting rs %v into GetMultiple Cols\n", rs)
 	return GetMultipleCols(rs, []int{0,1,2,5}), nil
 }
 
@@ -34,6 +35,7 @@ func GetMultipleCols(rs []io.Reader, cols []int) []io.Reader {
 
 func GetCols(r io.Reader, cols []int) io.Reader {
 	return PipeWrite(func(w io.Writer) {
+		fmt.Println("running GetCols internal func")
 		var line []string
 		var colvals []string
 		split := lscan.ByByte('\t')
@@ -41,6 +43,7 @@ func GetCols(r io.Reader, cols []int) io.Reader {
 		s := bufio.NewScanner(r)
 		s.Buffer([]byte{}, 1e12)
 		for s.Scan() {
+			fmt.Printf("scanning line: %v\n", s.Text())
 			line = lscan.SplitByFunc(line, s.Text(), split)
 			colvals = colvals[:0]
 			for _, col := range cols {

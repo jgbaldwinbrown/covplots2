@@ -9,7 +9,7 @@ import (
 type InputSet struct {
 	Paths []string `json:"paths"`
 	Name string `json:"name"`
-	Functions []string `json:"function"`
+	Functions []string `json:"functions"`
 	FunctionArgs []any `json: "functionargs"`
 	Extra any `json: "extra"`
 }

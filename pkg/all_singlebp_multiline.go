@@ -99,12 +99,14 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "columns": return Columns
 	case "hic_self_cols": return HicSelfColumns
 	case "hic_pair_cols": return HicPairColumns
+	case "rechr": return ReChr
 	default: return Panic
 	}
 	return Panic
 }
 
 func OpenPaths(paths ...string) ([]io.Reader, error) {
+	fmt.Printf("opening paths %v\n", paths)
 	var out []io.Reader
 	for _, path := range paths {
 		r, err := os.Open(path)
@@ -143,8 +145,17 @@ func MultiplotInputSet(cfg InputSet, chr string, start, end int) (io.Reader, []i
 	}
 
 	for i, funcstr := range cfg.Functions {
+		fmt.Println("running", funcstr)
 		f := GetFunc(funcstr)
-		frs, err = f(frs, cfg.FunctionArgs[i])
+		if len(cfg.FunctionArgs) > i {
+			frs, err = f(frs, cfg.FunctionArgs[i])
+		} else {
+			frs, err = f(frs, nil)
+		}
+		if err != nil {
+			CloseAny(closers...)
+			return nil, nil, fmt.Errorf("error when running %v", funcstr)
+		}
 	}
 	if len(frs) != 1 {
 		CloseAny(closers...)
@@ -301,7 +312,7 @@ func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
 			end := start + winsize
 			err := Multiplot(cfg, chr, start, end)
 			if err != nil {
-				return fmt.Errorf("SubtractSinglePlotWins: %w", err)
+				return fmt.Errorf("MultiplotSlide loop: %w", err)
 			}
 		}
 	}

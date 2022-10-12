@@ -247,6 +247,31 @@ func Filter(r io.Reader, chr string, start, end int) (*Filterer, error) {
 	return f, nil
 }
 
+func ReChr(rs []io.Reader, abiolines any) ([]io.Reader, error) {
+	biolines, ok := abiolines.([]string)
+	if !ok {
+		return nil, fmt.Errorf("abiolines %v not of type []string", abiolines)
+	}
+	var outs []io.Reader
+	for _, r := range rs {
+		outs = append(outs, ReChrSingle(r, biolines))
+	}
+	return outs, nil
+}
+
+func ReChrSingle(r io.Reader, biolines []string) (io.Reader) {
+	chrre := regexp.MustCompile(`^[^	]*`)
+	s := bufio.NewScanner(r)
+	s.Buffer([]byte{}, 1e12)
+	rout := PipeWrite(func(w io.Writer) {
+		for _, l := range biolines {
+			out := chrre.ReplaceAllString(s.Text(), `&` + "_" + l)
+			fmt.Println(w, out)
+		}
+	})
+	return rout
+}
+
 func RunSingle() {
 	f := GetFlags()
 
