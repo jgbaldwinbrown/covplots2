@@ -1,0 +1,16 @@
+[
+	{
+		"inputsets": [
+			{
+				"paths":[
+					"axwm_coverage.bg_lifted.bed"
+				],
+				"name": "axwm",
+				"functions": ["unchanged"]
+			}
+		],
+		"chrlens": "chrlens_remap.txt",
+		"outpre": "test22out/axwm_test",
+		"ylim": [-100, 300]
+	}
+]
