@@ -25,6 +25,11 @@ func HicPairColumns(rs []io.Reader, args any) ([]io.Reader, error) {
 	return GetMultipleCols(rs, []int{0,1,2,5}), nil
 }
 
+func WindowCovColumns(rs []io.Reader, args any) ([]io.Reader, error) {
+	fmt.Printf("WindowCovColumns: putting rs %v into GetMultiple Cols\n", rs)
+	return GetMultipleCols(rs, []int{0,1,2,3}), nil
+}
+
 func GetMultipleCols(rs []io.Reader, cols []int) []io.Reader {
 	out := make([]io.Reader, len(rs))
 	for i, r := range rs {
@@ -43,7 +48,7 @@ func GetCols(r io.Reader, cols []int) io.Reader {
 		s := bufio.NewScanner(r)
 		s.Buffer([]byte{}, 1e12)
 		for s.Scan() {
-			fmt.Printf("scanning line: %v\n", s.Text())
+			// fmt.Printf("scanning line: %v\n", s.Text())
 			line = lscan.SplitByFunc(line, s.Text(), split)
 			colvals = colvals[:0]
 			for _, col := range cols {

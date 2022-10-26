@@ -100,6 +100,8 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "hic_self_cols": return HicSelfColumns
 	case "hic_pair_cols": return HicPairColumns
 	case "rechr": return ReChr
+	case "cov_win_cols": return WindowCovColumns
+	case "per_bp": return MultiplePerBpNormalize
 	default: return Panic
 	}
 	return Panic
