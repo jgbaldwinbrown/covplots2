@@ -24,3 +24,6 @@ chmod +x ~/mybin/plot_sub_single_cov
 cp scripts/plot_singlebp_multiline_cov.R ~/mybin/plot_singlebp_multiline_cov
 chmod +x ~/mybin/plot_singlebp_multiline_cov
 cp scripts/plot_cov_helpers.R ~/rlibs
+
+cp scripts/plot_cov_vs_pair.R ~/mybin/plot_cov_vs_pair
+chmod +x ~/mybin/plot_cov_vs_pair

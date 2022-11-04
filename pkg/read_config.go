@@ -19,6 +19,8 @@ type UltimateConfig struct {
 	Chrlens string `json:"chrlens"`
 	Outpre string `json:"outpre"`
 	Ylim []float64 `json:"ylim"`
+	Plotfunc string `json: "plotfunc"`
+	Fullchr bool `json: "fullchr"`
 }
 
 func ReadUltimateConfig(r io.Reader) ([]UltimateConfig, error) {

@@ -97,11 +97,20 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "unchanged": return Unchanged
 	case "normalize": return Normalize
 	case "columns": return Columns
+	case "columns_some": return ColumnsSome
 	case "hic_self_cols": return HicSelfColumns
+	case "hic_self_cols_some": return HicSelfColumnsSome
 	case "hic_pair_cols": return HicPairColumns
+	case "hic_pair_cols_some": return HicPairColumnsSome
+	case "hic_pair_prop_cols": return HicPairPropColumns
+	case "hic_pair_prop_cols_some": return HicPairPropColumnsSome
+	case "hic_pair_prop_fpkm_cols": return HicPairPropFpkmColumns
+	case "hic_pair_prop_fpkm_cols_some": return HicPairPropFpkmColumnsSome
 	case "rechr": return ReChr
 	case "cov_win_cols": return WindowCovColumns
+	case "cov_win_cols_some": return WindowCovColumnsSome
 	case "per_bp": return MultiplePerBpNormalize
+	case "combine_to_one_line": return CombineToOneLine
 	default: return Panic
 	}
 	return Panic
@@ -130,7 +139,7 @@ func CloseAny[T any](ts ...T) {
 	}
 }
 
-func MultiplotInputSet(cfg InputSet, chr string, start, end int) (io.Reader, []io.Closer, error) {
+func MultiplotInputSet(cfg InputSet, chr string, start, end int, fullchr bool) (io.Reader, []io.Closer, error) {
 	rs, err := OpenPaths(cfg.Paths...)
 	if err != nil {
 		return nil, nil, err
@@ -140,10 +149,15 @@ func MultiplotInputSet(cfg InputSet, chr string, start, end int) (io.Reader, []i
 		closers = append(closers, r.(io.Closer))
 	}
 
-	frs, err := FilterMulti(chr, start, end, rs...)
-	if err != nil {
-		CloseAny(closers...)
-		return nil, nil, err
+	var frs []io.Reader
+	if !fullchr {
+		frs, err = FilterMulti(chr, start, end, rs...)
+		if err != nil {
+			CloseAny(closers...)
+			return nil, nil, err
+		}
+	} else {
+		frs = rs
 	}
 
 	for i, funcstr := range cfg.Functions {
@@ -170,7 +184,7 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
 	var rs []io.Reader
 	for _, set := range cfg.InputSets {
-		r, closers, err := MultiplotInputSet(set, chr, start, end)
+		r, closers, err := MultiplotInputSet(set, chr, start, end, cfg.Fullchr)
 		if err != nil {
 			return err
 		}
@@ -197,7 +211,9 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	if cfg.Ylim != nil {
 		ylim = cfg.Ylim
 	}
-	err = PlotMulti(outpre, ylim)
+
+	plotfunc := GetPlotFunc(cfg.Plotfunc)
+	err = plotfunc(outpre, ylim, nil)
 	if err != nil {
 		return err
 	}
@@ -302,6 +318,15 @@ func Normalize(rs []io.Reader, args any) ([]io.Reader, error) {
 	return []io.Reader{strings.NewReader(out.String())}, nil
 }
 
+func MultiplotFullchr(cfg UltimateConfig) error {
+	err := Multiplot(cfg, "full_genome", 0, 0)
+	if err != nil {
+		return fmt.Errorf("MultiplotSlide loop: %w", err)
+	}
+
+	return nil
+}
+
 func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
 	chrlens, err := GetChrLens(cfg.Chrlens)
 	if err != nil {
@@ -334,7 +359,11 @@ func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int) 
 	for i:=0; i<threads; i++ {
 		go func() {
 			for cfg := range jobs {
-				errs <- MultiplotSlide(cfg, winsize, winstep)
+				if cfg.Fullchr {
+					errs <- MultiplotFullchr(cfg)
+				} else {
+					errs <- MultiplotSlide(cfg, winsize, winstep)
+				}
 			}
 		}()
 	}

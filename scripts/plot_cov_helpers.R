@@ -99,6 +99,29 @@ read_bed_cov_named <- function(inpath, nlog) {
 	return(giant)
 }
 
+# FST win is in bed format
+read_bed_2val_named <- function(inpath, nlog) {
+	giant = as.data.frame(fread(inpath), header=FALSE)
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
+	colnames(giant) = c("chrom", "BP1", "BP", "VAL1", "VAL2", "NAME", "CHR", "cumsum.tmp", "cumsum.tmp2")
+	if (nlog) {
+		giant$VAL = -log10(giant$VAL)
+	}
+	return(giant)
+}
+
 # for reading bed format files with only the minimum columns
 read_bed_noval <- function(inpath) {
 	giant = as.data.frame(fread(inpath), header=FALSE)
@@ -365,7 +388,7 @@ plot_cov_multi <- function(data, path, width, height, res_scale, medians, ylimmi
 	print(ylimmax)
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		a = ggplot(data = data) +
-		geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
 		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
 		xlab("Chromosome") +
 		ylab("Raw coverage") +
@@ -375,5 +398,17 @@ plot_cov_multi <- function(data, path, width, height, res_scale, medians, ylimmi
 		theme(text = element_text(size=24))
 		print(a)
 	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
 }
 		#scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"), name = "Dataset")+
+
+plot_cov_vs_pair <- function(data, path, width, height, res_scale) {
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = VAL1, y=VAL2)) +
+		xlab("Coverage") +
+		ylab("Pairing proportion") +
+		theme_bw()
+		print(a)
+	dev.off()
+}
