@@ -1,6 +1,8 @@
 package covplots
 
 import (
+	"errors"
+	"os/exec"
 	"math"
 	"github.com/montanaflynn/stats"
 	"strconv"
@@ -180,6 +182,18 @@ func MultiplotInputSet(cfg InputSet, chr string, start, end int, fullchr bool) (
 	return frs[0], closers, err
 }
 
+func CheckPathExists(path string) bool {
+	_, err := os.Stat("/path/to/whatever")
+	return !errors.Is(err, os.ErrNotExist)
+}
+
+func GzPath(path string, threads int) error {
+	cmd := exec.Command("pigz", "-f", "-p", fmt.Sprintf("%d", threads), path)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
 	var rs []io.Reader
@@ -217,6 +231,12 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	if err != nil {
 		return err
 	}
+
+	err = GzPath(outpre + "_plfmt.bed", 8)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

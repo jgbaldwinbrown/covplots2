@@ -1,0 +1,17 @@
+[
+	{
+		"inputsets": [
+			{
+				"paths":[ "minicov.bed", "minipair3.bed" ],
+				"name": "minicov2_vs_minipair",
+				"functions": ["cov_win_cols_some", "combine_to_one_line"]
+				"functionargs": [[0],null]
+			}
+		],
+		"chrlens": "chrlens.txt",
+		"outpre": "cov_vs_pair/cvp",
+		"ylim": [-8.0, 8.0],
+		"plotfunc": "plot_cov_vs_pair",
+		"fullchr": true
+	}
+]
