@@ -122,6 +122,22 @@ read_bed_2val_named <- function(inpath, nlog) {
 	return(giant)
 }
 
+read_2_col <- function(inpath, nlog) {
+	giant = as.data.frame(fread(inpath), header=FALSE)
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
+	colnames(giant) = c("VAL1", "VAL2")
+	if (nlog) {
+		giant$VAL = -log10(giant$VAL)
+	}
+	return(giant)
+}
+
 # for reading bed format files with only the minimum columns
 read_bed_noval <- function(inpath) {
 	giant = as.data.frame(fread(inpath), header=FALSE)

@@ -27,3 +27,6 @@ cp scripts/plot_cov_helpers.R ~/rlibs
 
 cp scripts/plot_cov_vs_pair.R ~/mybin/plot_cov_vs_pair
 chmod +x ~/mybin/plot_cov_vs_pair
+
+cp scripts/plot_cov_vs_pair_minimal.R ~/mybin/plot_cov_vs_pair_minimal
+chmod +x ~/mybin/plot_cov_vs_pair_minimal
