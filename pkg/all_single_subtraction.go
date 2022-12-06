@@ -110,6 +110,27 @@ type Pos struct {
 	Bp int
 }
 
+type SubVal struct {
+	Val float64
+	Subtracted bool
+}
+
+func ParsePosVal(line string, outbuf []PosEntry) ([]PosEntry, error) {
+	outbuf = outbuf[:0]
+	var chr string
+	var start int
+	var end int
+	var v float64
+	_, err := fmt.Sscanf(line, "%s	%d	%d	%f", &chr, &start, &end, &v)
+	if err != nil {
+		return nil, fmt.Errorf("ParsePosVal: %w", err)
+	}
+	for i:=start; i<end; i++ {
+		outbuf = append(outbuf, PosEntry{Pos{chr, i}, v})
+	}
+	return outbuf, nil
+}
+
 func CollectVals(r io.Reader) (map[Pos]float64, error) {
 	out := make(map[Pos]float64)
 	s := bufio.NewScanner(r)
@@ -130,7 +151,53 @@ func CollectVals(r io.Reader) (map[Pos]float64, error) {
 	return out, nil
 }
 
+func SubtractInternal(r1, r2 io.Reader) (map[Pos]SubVal, error) {
+	out := map[Pos]SubVal{}
+	s1 := bufio.NewScanner(r1)
+	s1.Buffer([]byte{}, 1e12)
+	var posvals []PosEntry
+	for s1.Scan() {
+		posvals, err := ParsePosVal(s1.Text(), posvals)
+		if err != nil {
+			return nil, fmt.Errorf("SubtractInternal: %w", err)
+		}
+		for _, pv := range posvals {
+			out[pv.Pos] = SubVal{pv.Val, false}
+		}
+	}
+
+	s2 := bufio.NewScanner(r2)
+	s2.Buffer([]byte{}, 1e12)
+	for s2.Scan() {
+		posvals, err := ParsePosVal(s2.Text(), posvals)
+		if err != nil {
+			return nil, fmt.Errorf("SubtractInternal: %w", err)
+		}
+		for _, pv2 := range posvals {
+			if sv1, ok := out[pv2.Pos]; ok {
+				out[pv2.Pos] = SubVal{sv1.Val - pv2.Val, true}
+			}
+		}
+	}
+	return out, nil
+}
+
 func Subtract(r1, r2 io.Reader) (*strings.Reader, error) {
+	sub, err := SubtractInternal(r1, r2)
+	if err != nil {
+		return nil, fmt.Errorf("Subtract: %w", err)
+	}
+
+	var out strings.Builder
+	for pos, sval := range sub {
+		if sval.Subtracted {
+			fmt.Fprintf(&out, "%s\t%d\t%d\t%f\n", pos.Chr, pos.Bp, pos.Bp+1, sval.Val)
+		}
+	}
+	return strings.NewReader(out.String()), nil
+}
+
+func SubtractOld(r1, r2 io.Reader) (*strings.Reader, error) {
 	vals1, err := CollectVals(r1)
 	if err != nil {
 		return nil, fmt.Errorf("Subtract: %w", err)
