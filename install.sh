@@ -25,8 +25,14 @@ chmod +x ~/mybin/plot_sub_single_cov
 cp scripts/plot_singlebp_multiline_cov.R ~/mybin/plot_singlebp_multiline_cov
 chmod +x ~/mybin/plot_singlebp_multiline_cov
 
+cp scripts/plot_singlebp_multiline_cov_pretty.R ~/mybin/plot_singlebp_multiline_cov_pretty
+chmod +x ~/mybin/plot_singlebp_multiline_cov_pretty
+
 cp scripts/plot_singlebp_multiline_cov_facet.R ~/mybin/plot_singlebp_multiline_cov_facet
 chmod +x ~/mybin/plot_singlebp_multiline_cov_facet
+
+cp scripts/plot_singlebp_multiline_cov_facetscales.R ~/mybin/plot_singlebp_multiline_cov_facetscales
+chmod +x ~/mybin/plot_singlebp_multiline_cov_facetscales
 
 cp scripts/plot_cov_helpers.R ~/rlibs
 

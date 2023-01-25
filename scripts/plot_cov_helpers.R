@@ -6,6 +6,24 @@ library(magrittr)
 library(ggplot2)
 library(facetscales)
 
+read_scales <- function(inpath) {
+	print("reading scales from:")
+	print(inpath)
+	giant = as.data.frame(fread(inpath, header=TRUE))
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			character(),
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
+	colnames(giant) = c("FACET", "MIN", "MAX")
+	out = apply(giant[,2:3], 1, function(x){scale_y_continuous(lim=c(x[1], x[2]))})
+	names(out) = giant$FACET
+	return(out)
+}
+
 read_combined_pvals_precomputed <- function(inpath) {
 	giant = as.data.frame(fread(inpath), header=TRUE)
 	if (ncol(giant) == 0) {
@@ -280,7 +298,7 @@ plot <- function(data, valcol, path, width, height, res_scale, thresholds, media
 		xlab("Chromosome") +
 		ylab(expression(-log[10](italic(p)))) +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
-		theme_bw() + 
+		theme_bw() +
 		facet_grid(NAME~., scales="free_y") +
 		theme(text = element_text(size=24))
 		print(a)
@@ -297,7 +315,7 @@ plot_scaled_y <- function(data, valcol, path, width, height, res_scale, threshol
 		xlab("Chromosome") +
 		ylab(expression(-log[10](italic(p)))) +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
-		theme_bw() + 
+		theme_bw() +
 		facet_grid_sc(NAME~., scales=list(y=scales_y)) +
 		theme(text = element_text(size=24))
 		print(a)
@@ -316,7 +334,7 @@ plot_scaled_y_boxed <- function(data, valcol, path, width, height, res_scale, th
 		xlab("Chromosome") +
 		ylab(expression(-log[10](italic(p)))) +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
-		theme_bw() + 
+		theme_bw() +
 		facet_grid_sc(NAME~., scales=list(y=scales_y)) +
 		theme(text = element_text(size=24))
 		print(a)
@@ -336,7 +354,7 @@ plot_scaled_y_boxed_text <- function(data, valcol, path, width, height, res_scal
 		xlab("Chromosome") +
 		ylab(expression(-log[10](italic(p)))) +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
-		theme_bw() + 
+		theme_bw() +
 		facet_grid_sc(factor(NAME, levels=c("black", "white", "figurita", "runt"))~., scales=list(y=scales_y)) +
 		theme(text = element_text(size=24))
 		print(a)
@@ -356,7 +374,7 @@ get_vert <- function(data, threshold) {
 get_verts <- function(data, thresholds) {
 	names = as.character(levels(factor(data$NAME)))
 	vertslist = sapply(
-		names, 
+		names,
 		function(x){
 			get_vert(data[data$NAME==x,], thresholds[thresholds$NAME==x,])
 		}
@@ -378,7 +396,7 @@ plot_scaled_y_vert <- function(data, valcol, path, width, height, res_scale, thr
 		xlab("Chromosome") +
 		ylab(expression(-log[10](italic(p)))) +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
-		theme_bw() + 
+		theme_bw() +
 		facet_grid_sc(NAME~., scales=list(y=scales_y)) +
 		theme(text = element_text(size=24))
 		print(a)
@@ -405,7 +423,7 @@ plot_cov <- function(data, path, width, height, res_scale, medians) {
 		ylab("Raw coverage") +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
 		ylim(0,300) +
-		theme_bw() + 
+		theme_bw() +
 		theme(text = element_text(size=24))
 		print(a)
 	dev.off()
@@ -421,7 +439,7 @@ plot_cov_sub <- function(data, path, width, height, res_scale, medians) {
 		ylab("Raw coverage") +
 		scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"))+
 		ylim(-300,300) +
-		theme_bw() + 
+		theme_bw() +
 		theme(text = element_text(size=24))
 		print(a)
 	dev.off()
@@ -440,7 +458,7 @@ plot_cov_multi <- function(data, path, width, height, res_scale, medians, ylimmi
 		ylab("Raw coverage") +
 		scale_color_discrete(name = "Dataset")+
 		ylim(ylimmin, ylimmax) +
-		theme_bw() + 
+		theme_bw() +
 		theme(text = element_text(size=24))
 		print(a)
 	dev.off()
@@ -474,7 +492,7 @@ plot_cov_multi_facet <- function(data, path, width, height, res_scale, medians, 
 		ylab("Raw coverage") +
 		scale_color_discrete(name = "Dataset")+
 		ylim(ylimmin, ylimmax) +
-		theme_bw() + 
+		theme_bw() +
 		theme(text = element_text(size=24)) +
 		facet_grid(FACET~.)
 
@@ -482,3 +500,54 @@ plot_cov_multi_facet <- function(data, path, width, height, res_scale, medians, 
 	dev.off()
 		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
 }
+
+plot_cov_multi_facetsc <- function(data, path, width, height, res_scale, medians, scales_y) {
+	print("data head:")
+	print(head(data))
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab("Chromosome") +
+		ylab("Raw coverage") +
+		scale_color_discrete(name = "Dataset")+
+		theme_bw() +
+		theme(text = element_text(size=24)) +
+		facet_grid_sc(factor(FACET, levels=names(scales_y))~., scales=list(y=scales_y))
+
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+
+plot_cov_multi_pretty <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab) {
+	print("ylimmin:")
+	print(ylimmin)
+	print("ylimmax:")
+	print(ylimmax)
+	print("width:")
+	print(width)
+	print("height:")
+	print(height)
+	print("xlab:")
+	print(xlab)
+	print("ylab:")
+	print(ylab)
+	print("res_scale:")
+	print(res_scale)
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab(xlab) +
+		ylab(ylab) +
+		scale_color_discrete(name = "Dataset")+
+		ylim(ylimmin, ylimmax) +
+		theme_bw() +
+		theme(text = element_text(size=24))
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+		#scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"), name = "Dataset")+
+
