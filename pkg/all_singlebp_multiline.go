@@ -241,7 +241,24 @@ func MultiplotInputSet(cfg InputSet, chr string, start, end int, fullchr bool) (
 		CloseAny(closers...)
 		return nil, nil, fmt.Errorf("Need exactly one reader")
 	}
-	return frs[0], closers, err
+
+
+	var out io.Reader = frs[0]
+	if !fullchr {
+		outs, err := FilterMulti(chr, start, end, frs[0])
+		if err != nil {
+			CloseAny(closers...)
+			return nil, nil, fmt.Errorf("MultiplotInputSet: during FilterMulti 2: %w", err)
+		}
+		if len(outs) != 1 {
+			CloseAny(closers...)
+			return nil, nil, fmt.Errorf("Need exactly one reader")
+		}
+		out = outs[0]
+	}
+
+
+	return out, closers, err
 }
 
 func CheckPathExists(path string) bool {
