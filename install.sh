@@ -13,6 +13,8 @@ set -e
 	done
 ))
 
+cp scripts/find_caph2_peaks ~/mybin/find_caph2_peaks
+chmod +x ~/mybin/find_caph2_peaks
 cp scripts/full_single_cov_plot ~/mybin/full_single_cov_plot
 chmod +x ~/mybin/full_single_cov_plot
 cp cmd/all_singlebp_multiline ~/mybin/all_singlebp_multiline
