@@ -1,6 +1,7 @@
 package covplots
 
 import (
+	"encoding/json"
 	"bufio"
 	"math"
 	"sort"
@@ -13,9 +14,12 @@ import (
 func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any) error {
 	switch fstr {
 	case "plot_multi": return PlotMultiAny
+	case "plot_multi_pretty": return PlotMultiPrettyAny
 	case "plot_multi_facet": return PlotMultiFacetAny
+	case "plot_multi_facet_scales": return PlotMultiFacetScalesAny
 	case "": return PlotMultiAny
 	case "plot_cov_vs_pair": return PlotCovVsPair
+
 	default: return PlotPanic
 	}
 	return PlotPanic
@@ -27,6 +31,29 @@ func PlotPanic(outpre string, ylim []float64, args any) error {
 
 func PlotMultiAny(outpre string, ylim []float64, args any) error {
 	return PlotMulti(outpre, ylim)
+}
+
+func UnmarshalJsonOut(jsonOut any, dest any) error {
+	buf, err := json.Marshal(jsonOut)
+	if err != nil {
+		return fmt.Errorf("UnmarshalJsonOut: during Marshal: %w", err)
+	}
+
+	err = json.Unmarshal(buf, dest)
+	if err != nil {
+		return fmt.Errorf("UnmarshalJsonOut: during Unmarshal: %w", err)
+	}
+
+	return nil
+}
+
+func PlotMultiPrettyAny(outpre string, ylim []float64, args any) error {
+	var cfg PrettyCfg
+	err := UnmarshalJsonOut(args, &cfg)
+	if err != nil {
+		return err
+	}
+	return PlotMultiPretty(outpre, ylim, cfg)
 }
 
 func PlotMultiFacetAny(outpre string, ylim []float64, args any) error {
@@ -110,10 +137,14 @@ func CombineToOneLineOld(rs []io.Reader, args any) ([]io.Reader, error) {
 	return []io.Reader{out}, nil
 }
 
-type Entry struct {
+type Span struct {
 	Chr string
 	Start int
 	End int
+}
+
+type Entry struct {
+	Span
 	Val float64
 }
 
@@ -173,6 +204,7 @@ func CombineToOneLine(rs []io.Reader, args any) ([]io.Reader, error) {
 		}
 	}
 
+	fmt.Println(posmap)
 	out := PipeWrite(func(w io.Writer) {
 		for pos, vals := range posmap {
 			fmt.Fprintf(w, "%v\t%v\t%v", pos.Chr, pos.Bp, pos.Bp+1)

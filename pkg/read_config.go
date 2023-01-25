@@ -20,6 +20,7 @@ type UltimateConfig struct {
 	Outpre string `json:"outpre"`
 	Ylim []float64 `json:"ylim"`
 	Plotfunc string `json: "plotfunc"`
+	PlotfuncArgs any `json: "plotfuncargs"`
 	Fullchr bool `json: "fullchr"`
 }
 

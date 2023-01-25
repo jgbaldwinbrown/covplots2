@@ -1,6 +1,8 @@
 package covplots
 
 import (
+	"github.com/jgbaldwinbrown/shellout/pkg"
+	"os"
 	"fmt"
 	"bufio"
 	"io"
@@ -39,3 +41,32 @@ func AddFacet(rs []io.Reader, args any) ([]io.Reader, error) {
 	}
 	return out, nil
 }
+
+func PlotMultiFacetScales(outpre string, scalespath string) error {
+	fmt.Fprintf(os.Stderr, "running PlotMultiFacetScales\n")
+	fmt.Fprintf(os.Stderr, "PlotMultiFacetScales scalespath: %v\n", scalespath);
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_singlebp_multiline_cov_facetscales %v %v %v
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		scalespath,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+func PlotMultiFacetScalesAny(outpre string, ylim []float64, args any) error {
+	scalespath, ok := args.(string)
+	if !ok {
+		return fmt.Errorf("PlotMultiFacetScalesAny: args %v not a string")
+	}
+	if scalespath == "" {
+		return fmt.Errorf("PlotMultiFacetScalesAny: args %v == \"\"")
+	}
+	return PlotMultiFacetScales(outpre, scalespath)
+}
+

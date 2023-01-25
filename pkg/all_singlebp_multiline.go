@@ -21,6 +21,7 @@ func GetAllMultiplotFlags() AllSingleFlags {
 	flag.IntVar(&f.WinSize, "w", 1000000, "Sliding window plot size (default = 1000000).")
 	flag.IntVar(&f.WinStep, "s", 1000000, "Sliding window step distance (default = 1000000).")
 	flag.IntVar(&f.Threads, "t", 8, "Threads to run simultaneously")
+	flag.BoolVar(&f.WholeGenome, "g", false, "Generate one plot for the whole genome, no windowing")
 	flag.Parse()
 
 	return f
@@ -36,7 +37,7 @@ func RunAllMultiplot() {
 	}
 	fmt.Println(cfg)
 
-	err = AllMultiplotParallel(cfg, f.WinSize, f.WinStep, f.Threads)
+	err = AllMultiplotParallel(cfg, f.WinSize, f.WinStep, f.Threads, f.WholeGenome)
 	if err != nil {
 		panic(err)
 	}
@@ -86,6 +87,42 @@ plot_singlebp_multiline_cov %v %v %v %v
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
+	// xlab = args[5]
+	// ylab = args[6]
+
+	// width = as.numeric(args[7])
+	// height = as.numeric(args[8])
+	// res = as.numeric(args[9])
+
+type PrettyCfg struct {
+	Xlab string
+	Ylab string
+	Width int
+	Height int
+	Res int
+}
+
+func PlotMultiPretty(outpre string, ylim []float64, cfg PrettyCfg) error {
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_singlebp_multiline_cov_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		cfg.Xlab,
+		cfg.Ylab,
+		cfg.Width,
+		cfg.Height,
+		cfg.Res,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
 func PlotMultiFacet(outpre string, ylim []float64) error {
 	fmt.Fprintf(os.Stderr, "running PlotMultiFacet\n")
 	script := fmt.Sprintf(
@@ -114,8 +151,10 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	switch fstr {
 	case "add_facet": return AddFacet
 	case "subtract_two": return SubtractTwo
+	case "dumb_subtract_two": return DumbSubtractTwo
 	case "unchanged": return Unchanged
 	case "normalize": return Normalize
+	case "fourcolumns": return FourColumns
 	case "columns": return Columns
 	case "columns_some": return ColumnsSome
 	case "hic_self_cols": return HicSelfColumns
@@ -131,6 +170,10 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "cov_win_cols_some": return WindowCovColumnsSome
 	case "per_bp": return MultiplePerBpNormalize
 	case "combine_to_one_line": return CombineToOneLine
+	case "log10": return Log10
+	case "abs": return Abs
+	case "gunzip": return Gunzip
+	case "chrgrep": return ChrGrep
 	default: return Panic
 	}
 	return Panic
@@ -216,7 +259,7 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
 	var rs []io.Reader
 	for _, set := range cfg.InputSets {
-		r, closers, err := MultiplotInputSet(set, chr, start, end, cfg.Fullchr)
+		r, closers, err := MultiplotInputSet(set, chr, start, end, cfg.Fullchr || chr == "full_genome")
 		if err != nil {
 			return fmt.Errorf("Multiplot: during MultiplotInputSet: %w", err)
 		}
@@ -245,7 +288,7 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	}
 
 	plotfunc := GetPlotFunc(cfg.Plotfunc)
-	err = plotfunc(outpre, ylim, nil)
+	err = plotfunc(outpre, ylim, cfg.PlotfuncArgs)
 	if err != nil {
 		return fmt.Errorf("Multiplot: during plotfunc: %w", err)
 	}
@@ -385,7 +428,7 @@ func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
 	return nil
 }
 
-func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int) error {
+func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int, fullgenome bool) error {
 	jobs := make(chan UltimateConfig, len(cfgs))
 	for _, cfg := range cfgs {
 		jobs <- cfg
@@ -397,7 +440,7 @@ func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int) 
 	for i:=0; i<threads; i++ {
 		go func() {
 			for cfg := range jobs {
-				if cfg.Fullchr {
+				if cfg.Fullchr || fullgenome {
 					errs <- MultiplotFullchr(cfg)
 				} else {
 					errs <- MultiplotSlide(cfg, winsize, winstep)

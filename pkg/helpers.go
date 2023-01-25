@@ -264,10 +264,51 @@ func ReChrSingle(r io.Reader, biolines []string) (io.Reader) {
 	s := bufio.NewScanner(r)
 	s.Buffer([]byte{}, 1e12)
 	rout := PipeWrite(func(w io.Writer) {
-		for _, l := range biolines {
-			out := chrre.ReplaceAllString(s.Text(), `&` + "_" + l)
+		for s.Scan() {
+			out := s.Text()
+			for _, l := range biolines {
+				out = chrre.ReplaceAllString(out, `&` + "_" + l)
+			}
 			fmt.Println(w, out)
 		}
+	})
+	return rout
+}
+
+func ChrGrep(rs []io.Reader, apattern any) ([]io.Reader, error) {
+	pattern, ok := apattern.(string)
+	if !ok {
+		return nil, fmt.Errorf("pattern %v not of type string", apattern)
+	}
+
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("ChrGrep: could not compile pattern %v with error %w", pattern, err)
+	}
+
+	var outs []io.Reader
+	for _, r := range rs {
+		outs = append(outs, ChrGrepSingle(r, re))
+	}
+	return outs, nil
+}
+
+func ChrGrepSingle(r io.Reader, re *regexp.Regexp) (io.Reader) {
+	chrre := regexp.MustCompile(`^[^	]*`)
+	s := bufio.NewScanner(r)
+	s.Buffer([]byte{}, 1e12)
+	rout := PipeWrite(func(w io.Writer) {
+		i := 0
+		j := 0
+		for s.Scan() {
+			chrstr := chrre.FindString(s.Text())
+			if re.MatchString(chrstr) {
+				fmt.Fprintln(w, s.Text())
+				j++
+			}
+			i++
+		}
+		fmt.Fprintf(os.Stderr, "ChrGrep: printed %v of %v lines\n", j, i)
 	})
 	return rout
 }
