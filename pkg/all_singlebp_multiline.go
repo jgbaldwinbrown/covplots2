@@ -174,6 +174,7 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "abs": return Abs
 	case "gunzip": return Gunzip
 	case "chrgrep": return ChrGrep
+	case "sliding_mean": return SlidingMean
 	default: return Panic
 	}
 	return Panic
