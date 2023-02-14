@@ -146,6 +146,35 @@ read_bed_cov_named_facetted <- function(inpath, nlog) {
 	return(giant)
 }
 
+# FST win is in bed format with extra FACET column after NAME
+read_bed_cov_named_labelled <- function(inpath, nlog) {
+	giant = as.data.frame(fread(inpath), header=FALSE)
+	print(head(giant))
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			character(),
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
+	print("giant could be empty")
+	print(head(giant))
+	colnames(giant) = c("chrom", "BP1", "BP", "VAL", "LABEL", "NAME", "CHR", "cumsum.tmp", "cumsum.tmp2")
+	if (nlog) {
+		giant$VAL = -log10(giant$VAL)
+	}
+	print("final giant")
+	print(head(giant))
+	return(giant)
+}
+
 # FST win is in bed format
 read_bed_2val_named <- function(inpath, nlog) {
 	giant = as.data.frame(fread(inpath), header=FALSE)
@@ -470,9 +499,49 @@ plot_cov_vs_pair <- function(data, path, width, height, res_scale) {
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		a = ggplot(data = data) +
 		geom_point(aes(x = VAL1, y=VAL2)) +
+		xlim(c(0, 250)) +
 		xlab("Coverage") +
 		ylab("Pairing proportion") +
 		theme_bw()
+		print(a)
+	dev.off()
+}
+
+plot_self_vs_pair <- function(data, path, width, height, res_scale) {
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = VAL1, y=VAL2)) +
+		xlab("Self interactions") +
+		ylab("Pairing interactions") +
+		theme_bw()
+		print(a)
+	dev.off()
+}
+
+plot_self_vs_pair_lim <- function(data, path, width, height, res_scale, ymin, ymax, xmin, xmax) {
+	a = ggplot(data = data) +
+		geom_point(aes(x = VAL1, y=VAL2)) +
+		xlab("Self interactions") +
+		ylab("Pairing interactions") +
+		theme_bw() +
+		lims(x = c(xmin, xmax), y = c(ymin, ymax))
+
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		print(a)
+	dev.off()
+}
+
+plot_self_vs_pair_pretty <- function(data, path, width, height, res_scale, ymin, ymax, xmin, xmax, ylabel, xlabel, textsize) {
+	a = ggplot(data = data) +
+		geom_point(aes(x = VAL1, y=VAL2)) +
+		xlab(xlabel) +
+		ylab(ylabel) +
+		theme_bw() +
+		theme(text = element_text(size=textsize)) +
+		lims(x = c(xmin, xmax), y = c(ymin, ymax)) +
+		geom_smooth(aes(x = VAL1, y=VAL2), method = 'lm', se = TRUE)
+
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		print(a)
 	dev.off()
 }
@@ -509,11 +578,50 @@ plot_cov_multi_facetsc <- function(data, path, width, height, res_scale, medians
 		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
 		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
 		xlab("Chromosome") +
-		ylab("Raw coverage") +
+		ylab("Value") +
 		scale_color_discrete(name = "Dataset")+
 		theme_bw() +
 		theme(text = element_text(size=24)) +
 		facet_grid_sc(factor(FACET, levels=names(scales_y))~., scales=list(y=scales_y))
+
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+
+plot_cov_multi_facetsc_names <- function(data, path, width, height, res_scale, medians, scales_y) {
+	print("data head:")
+	print(head(data))
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(LABEL))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab("Chromosome") +
+		ylab("Pairing rate (regressed on Ill. cov. and self rate)") +
+		scale_color_discrete(name = "Outlier set")+
+		theme_bw() +
+		theme(text = element_text(size=24)) +
+		facet_grid_sc(factor(NAME, levels=names(scales_y))~., scales=list(y=scales_y))
+
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+
+plot_cov_multi_facetsc_x <- function(data, path, width, height, res_scale, medians, scales_y) {
+	print("data head:")
+	print(head(data))
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab("Chromosome") +
+		ylab("Value") +
+		scale_color_discrete(name = "Dataset")+
+		theme_bw() +
+		theme(text = element_text(size=24)) +
+		facet_grid_sc(factor(FACET, levels=names(scales_y))~., scales=list(y=scales_y)) +
+		geom_vline(xintercept=23278007)
 
 		print(a)
 	dev.off()
@@ -551,3 +659,40 @@ plot_cov_multi_pretty <- function(data, path, width, height, res_scale, medians,
 }
 		#scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"), name = "Dataset")+
 
+plot_cov_hist <- function(data, path, width, height, res_scale, ylimmin, ylimmax, xlimmin, xlimmax, xlab, ylab, binwidth) {
+	a = ggplot(data = data) +
+		geom_histogram(aes(VAL), binwidth = binwidth) +
+		xlab(xlab) +
+		ylab(ylab) +
+		scale_color_discrete(name = "Dataset")+
+		ylim(ylimmin, ylimmax) +
+		xlim(xlimmin, xlimmax) +
+		theme_bw() +
+		theme(text = element_text(size=18)) +
+		theme(axis.text.x = element_text(angle = 22.5, hjust=1))
+		# theme(axis.text.x = element_text(angle = 22.5, vjust = 0.5, hjust=1))
+
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		print(a)
+	dev.off()
+}
+
+plot_box_and_whisker <- function(data, pdfpath, pngpath, width, height, res_scale, ylimmin, ylimmax, xlimmin, xlimmax, xlab, ylab, textsize, fillname) {
+	a = ggplot(data = data) +
+		geom_boxplot(aes(NAME, VAL1, fill = VAL2)) +
+		xlab(xlab) +
+		ylab(ylab) +
+		scale_fill_discrete(name = fillname) +
+		ylim(ylimmin, ylimmax) +
+		theme_bw() +
+		theme(text = element_text(size=textsize)) +
+		theme(axis.text.x = element_text(angle = 22.5, hjust=1))
+
+	pdf(pdfpath, width = width, height = height)
+		print(a)
+	dev.off()
+
+	png(pngpath, width = width * res_scale, height = height * res_scale, res = res_scale)
+		print(a)
+	dev.off()
+}

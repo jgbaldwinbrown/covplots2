@@ -16,6 +16,7 @@ type AllSingleFlags struct {
 	WinStep int
 	Threads int
 	WholeGenome bool
+	SelectWins string
 }
 
 func GetAllSingleFlags() AllSingleFlags {

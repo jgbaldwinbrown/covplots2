@@ -1,6 +1,8 @@
 package covplots
 
 import (
+	"compress/gzip"
+	"regexp"
 	"errors"
 	"os/exec"
 	"math"
@@ -21,7 +23,8 @@ func GetAllMultiplotFlags() AllSingleFlags {
 	flag.IntVar(&f.WinSize, "w", 1000000, "Sliding window plot size (default = 1000000).")
 	flag.IntVar(&f.WinStep, "s", 1000000, "Sliding window step distance (default = 1000000).")
 	flag.IntVar(&f.Threads, "t", 8, "Threads to run simultaneously")
-	flag.BoolVar(&f.WholeGenome, "g", false, "Generate one plot for the whole genome, no windowing")
+	flag.BoolVar(&f.WholeGenome, "g", false, "Generate one plot for the whole genome, no windowing; this overrides all other options")
+	flag.StringVar(&f.SelectWins, "c", "", "Plot the windows specified in the provided .bed file path; this overrides sliding window options")
 	flag.Parse()
 
 	return f
@@ -37,7 +40,15 @@ func RunAllMultiplot() {
 	}
 	fmt.Println(cfg)
 
-	err = AllMultiplotParallel(cfg, f.WinSize, f.WinStep, f.Threads, f.WholeGenome)
+	var selectWins []BedEntry
+	if f.SelectWins != "" {
+		selectWins, err = ReadBedPath(f.SelectWins)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	err = AllMultiplotParallel(cfg, f.WinSize, f.WinStep, f.Threads, f.WholeGenome, selectWins)
 	if err != nil {
 		panic(err)
 	}
@@ -155,6 +166,7 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "unchanged": return Unchanged
 	case "normalize": return Normalize
 	case "fourcolumns": return FourColumns
+	case "fourcolumns_some": return FourColumnsSome
 	case "columns": return Columns
 	case "columns_some": return ColumnsSome
 	case "hic_self_cols": return HicSelfColumns
@@ -170,21 +182,63 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "cov_win_cols_some": return WindowCovColumnsSome
 	case "per_bp": return MultiplePerBpNormalize
 	case "combine_to_one_line": return CombineToOneLine
+	case "combine_to_one_line_dumb": return CombineToOneLineDumb
 	case "log10": return Log10
 	case "abs": return Abs
+	case "add": return Add
 	case "gunzip": return Gunzip
 	case "chrgrep": return ChrGrep
 	case "sliding_mean": return SlidingMean
+	case "strip_header": return StripHeader
+	case "strip_header_some": return StripHeaderSome
 	default: return Panic
 	}
 	return Panic
+}
+
+type GzReader struct {
+	f *os.File
+	*gzip.Reader
+}
+
+func (r *GzReader) Close() error {
+	e1 := r.Reader.Close()
+	e2 := r.f.Close()
+	if e1 != nil {
+		return e1
+	}
+	if e2 != nil {
+		return e2
+	}
+	return nil
+}
+
+func OpenMaybeGz(path string) (io.ReadCloser, error) {
+	re := regexp.MustCompile(`\.gz$`)
+
+	r, e := os.Open(path)
+	if e != nil {
+		return nil, e
+	}
+
+	if !re.MatchString(path) {
+		return r, nil
+	}
+
+	gr, e := gzip.NewReader(r)
+	if e != nil {
+		r.Close()
+		return nil, e
+	}
+
+	return &GzReader{f: r, Reader: gr}, nil
 }
 
 func OpenPaths(paths ...string) ([]io.Reader, error) {
 	fmt.Printf("opening paths %v\n", paths)
 	var out []io.Reader
 	for _, path := range paths {
-		r, err := os.Open(path)
+		r, err := OpenMaybeGz(path)
 		if err != nil {
 			CloseAny(out...)
 			return nil, err
@@ -426,6 +480,17 @@ func MultiplotFullchr(cfg UltimateConfig) error {
 	return nil
 }
 
+func MultiplotSelectWins(cfg UltimateConfig, wins []BedEntry) error {
+	h := Handle("MultiplotSelectWins: %w")
+
+	for _, entry := range wins {
+		e := Multiplot(cfg, entry.Chr, int(entry.Start), int(entry.End))
+		if E(e) { return h(e) }
+	}
+
+	return nil
+}
+
 func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
 	chrlens, err := GetChrLens(cfg.Chrlens)
 	if err != nil {
@@ -446,7 +511,7 @@ func MultiplotSlide(cfg UltimateConfig, winsize, winstep int) error {
 	return nil
 }
 
-func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int, fullgenome bool) error {
+func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int, fullgenome bool, selectWins []BedEntry) error {
 	jobs := make(chan UltimateConfig, len(cfgs))
 	for _, cfg := range cfgs {
 		jobs <- cfg
@@ -460,6 +525,8 @@ func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int, 
 			for cfg := range jobs {
 				if cfg.Fullchr || fullgenome {
 					errs <- MultiplotFullchr(cfg)
+				} else if selectWins != nil {
+					errs <- MultiplotSelectWins(cfg, selectWins)
 				} else {
 					errs <- MultiplotSlide(cfg, winsize, winstep)
 				}

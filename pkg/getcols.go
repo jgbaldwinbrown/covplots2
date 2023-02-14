@@ -1,7 +1,6 @@
 package covplots
 
 import (
-	"os"
 	"bufio"
 	"strings"
 	"io"
@@ -27,6 +26,12 @@ func Columns(rs []io.Reader, args any) ([]io.Reader, error) {
 
 func FourColumns(rs []io.Reader, args any) ([]io.Reader, error) {
 	return GetMultipleCols(rs, []int{0,1,2,3}), nil
+}
+
+func FourColumnsSome(rs []io.Reader, args any) ([]io.Reader, error) {
+	readers := ToIntSlice(args)
+	fmt.Printf("FourColumnsSome: putting rs %v into GetMultiple Cols, with reader indices %v\n", rs, readers)
+	return GetMultipleColsSome(rs, []int{0,1,2,3}, readers), nil
 }
 
 func ToIntSlice(a any) []int {
@@ -152,7 +157,7 @@ func GetCols(r io.Reader, cols []int) io.Reader {
 				}
 			}
 			fmt.Fprintln(w, strings.Join(colvals, "\t"))
-			fmt.Fprintf(os.Stderr, "GetCols output: %s\n", strings.Join(colvals, "\t"))
+			// fmt.Fprintf(os.Stderr, "GetCols output: %s\n", strings.Join(colvals, "\t"))
 		}
 		fmt.Printf("GetCols lines: %v\n", i)
 	})

@@ -1,6 +1,7 @@
 package covplots
 
 import (
+	"strconv"
 	"encoding/json"
 	"bufio"
 	"math"
@@ -17,8 +18,14 @@ func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any) erro
 	case "plot_multi_pretty": return PlotMultiPrettyAny
 	case "plot_multi_facet": return PlotMultiFacetAny
 	case "plot_multi_facet_scales": return PlotMultiFacetScalesAny
+	case "plot_multi_facetname_scales": return PlotMultiFacetnameScalesAny
 	case "": return PlotMultiAny
 	case "plot_cov_vs_pair": return PlotCovVsPair
+	case "plot_self_vs_pair": return PlotSelfVsPair
+	case "plot_self_vs_pair_lim": return PlotSelfVsPairLim
+	case "plot_self_vs_pair_pretty": return PlotSelfVsPairPretty
+	case "plot_boxwhisker": return PlotBoxwhisker
+	case "plot_cov_hist": return PlotCovHist
 
 	default: return PlotPanic
 	}
@@ -76,6 +83,89 @@ plot_cov_vs_pair %v %v %v %v
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
+func PlotSelfVsPair(outpre string, ylim []float64, args any) error {
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_self_vs_pair %v %v %v %v
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+func PlotSelfVsPairLim(outpre string, ylim []float64, args any) error {
+	var xlim []float64
+	err := UnmarshalJsonOut(args, &xlim)
+	if err != nil {
+		return fmt.Errorf("PlotSelfVsPairLim: %w", err)
+	}
+	if len(xlim) != 2 {
+		return fmt.Errorf("PlotSelfVsPairLim: len(xlim) %v != 2", len(xlim))
+	}
+
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_self_vs_pair_lim %v %v %v %v %v %v
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		xlim[0],
+		xlim[1],
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+type PlotSelfVsPairArgs struct {
+	Xmin float64
+	Xmax float64
+	Ylab string
+	Xlab string
+	Width float64
+	Height float64
+	ResScale float64
+	TextSize float64
+}
+
+func PlotSelfVsPairPretty(outpre string, ylim []float64, args any) error {
+	var a PlotSelfVsPairArgs
+	err := UnmarshalJsonOut(args, &a)
+	if err != nil { return fmt.Errorf("PlotSelfVsPairLim: %w", err) }
+
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_self_vs_pair_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		a.Xmin,
+		a.Xmax,
+		a.Ylab,
+		a.Xlab,
+		a.Width,
+		a.Height,
+		a.ResScale,
+		a.TextSize,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+
 func PosLess(p1, p2 Pos) bool {
 	if p1.Chr < p2.Chr {
 		return true
@@ -111,7 +201,7 @@ func CombineToOneLineOld(rs []io.Reader, args any) ([]io.Reader, error) {
 		maps = append(maps, posmap)
 	}
 
-	fmt.Fprintf(os.Stderr, "%v\n", maps[1])
+	// fmt.Fprintf(os.Stderr, "%v\n", maps[1])
 
 	poses := SortAndUniqPoses(maps...)
 	// fmt.Fprintf(os.Stderr, "%v\n", poses)
@@ -204,7 +294,7 @@ func CombineToOneLine(rs []io.Reader, args any) ([]io.Reader, error) {
 		}
 	}
 
-	fmt.Println(posmap)
+	// fmt.Println(posmap)
 	out := PipeWrite(func(w io.Writer) {
 		for pos, vals := range posmap {
 			fmt.Fprintf(w, "%v\t%v\t%v", pos.Chr, pos.Bp, pos.Bp+1)
@@ -216,3 +306,149 @@ func CombineToOneLine(rs []io.Reader, args any) ([]io.Reader, error) {
 	})
 	return []io.Reader{out}, nil
 }
+
+func CollectEntriesDumb(posmap map[Span][]float64, idx, nidx int, r io.Reader) error {
+	s := bufio.NewScanner(r)
+	s.Buffer([]byte{}, 1e12)
+	for s.Scan() {
+		entry, err := CollectEntryDumb(s.Text())
+		if err != nil {
+			return err
+		}
+		vals, ok := posmap[entry.Span]
+		if !ok {
+			vals = InitNaNSl(nidx)
+			posmap[entry.Span] = vals
+		}
+		vals[idx] = entry.Val
+	}
+	return nil
+}
+
+func CollectEntryDumb(text string) (Entry, error) {
+	var e Entry
+	var valstr string
+
+	_, err := fmt.Sscanf(text, "%s	%d	%d	%s", &e.Chr, &e.Start, &e.End, &valstr)
+	if err != nil { return e, fmt.Errorf("CollectEntryDumb: line %v: %w", text, err) }
+
+	e.Val, err = strconv.ParseFloat(valstr, 64)
+	if err != nil { e.Val = math.NaN() }
+
+	return e, nil
+}
+
+func CombineToOneLineDumb(rs []io.Reader, args any) ([]io.Reader, error) {
+	if len(rs) < 1 {
+		return []io.Reader{}, nil
+	}
+	fmt.Println("CombineToOneLineDumb len(rs):", len(rs))
+
+	posmap := map[Span][]float64{}
+	for i, r := range rs {
+		err := CollectEntriesDumb(posmap, i, len(rs), r)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	out := PipeWrite(func(w io.Writer) {
+		for span, vals := range posmap {
+			fmt.Println("printing span", span, "with vals", vals)
+			fmt.Fprintf(w, "%v\t%v\t%v", span.Chr, span.Start, span.End)
+			for _, val := range vals {
+				fmt.Fprintf(w, "\t%v", val)
+			}
+			fmt.Fprintf(w, "\n");
+		}
+	})
+	return []io.Reader{out}, nil
+}
+
+type PlotCovHistArgs struct {
+	Xmin float64
+	Xmax float64
+	Ylab string
+	Xlab string
+	Binwidth float64
+	Width float64
+	Height float64
+	ResScale float64
+}
+
+func PlotCovHist(outpre string, ylim []float64, args any) error {
+	h := handle("PlotCovHist: %w")
+
+	var hargs PlotCovHistArgs
+	err := UnmarshalJsonOut(args, &hargs)
+	fmt.Println(hargs)
+	if err != nil {
+		return h(err)
+	}
+
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_cov_hist "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		hargs.Xmin,
+		hargs.Xmax,
+		hargs.Ylab,
+		hargs.Xlab,
+		hargs.Binwidth,
+		hargs.Width,
+		hargs.Height,
+		hargs.ResScale,
+	)
+	fmt.Println(script)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+type PlotBoxwhiskerArgs struct {
+	Xmin float64
+	Xmax float64
+	Ylab string
+	Xlab string
+	Width float64
+	Height float64
+	ResScale float64
+	TextSize float64
+	FillName string
+}
+
+func PlotBoxwhisker(outpre string, ylim []float64, args any) error {
+	var a PlotBoxwhiskerArgs
+	err := UnmarshalJsonOut(args, &a)
+	if err != nil { return fmt.Errorf("PlotSelfVsPairLim: %w", err) }
+
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_boxwhisker "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.pdf", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		a.Xmin,
+		a.Xmax,
+		a.Ylab,
+		a.Xlab,
+		a.Width,
+		a.Height,
+		a.ResScale,
+		a.TextSize,
+		a.FillName,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
