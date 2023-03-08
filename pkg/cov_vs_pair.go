@@ -1,7 +1,6 @@
 package covplots
 
 import (
-	"strconv"
 	"encoding/json"
 	"bufio"
 	"math"
@@ -16,14 +15,18 @@ func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any) erro
 	switch fstr {
 	case "plot_multi": return PlotMultiAny
 	case "plot_multi_pretty": return PlotMultiPrettyAny
+	case "plot_multi_pretty_blue": return PlotMultiPrettyBlueAny
+	case "plot_multi_pretty_colorseries": return PlotMultiPrettyColorseriesAny
 	case "plot_multi_facet": return PlotMultiFacetAny
 	case "plot_multi_facet_scales": return PlotMultiFacetScalesAny
 	case "plot_multi_facetname_scales": return PlotMultiFacetnameScalesAny
 	case "": return PlotMultiAny
+	case "fixedorder": return PlotMultiFixedOrderAny
 	case "plot_cov_vs_pair": return PlotCovVsPair
 	case "plot_self_vs_pair": return PlotSelfVsPair
 	case "plot_self_vs_pair_lim": return PlotSelfVsPairLim
 	case "plot_self_vs_pair_pretty": return PlotSelfVsPairPretty
+	case "plot_self_vs_pair_pretty_fixed": return PlotSelfVsPairPrettyFixed
 	case "plot_boxwhisker": return PlotBoxwhisker
 	case "plot_cov_hist": return PlotCovHist
 
@@ -38,6 +41,10 @@ func PlotPanic(outpre string, ylim []float64, args any) error {
 
 func PlotMultiAny(outpre string, ylim []float64, args any) error {
 	return PlotMulti(outpre, ylim)
+}
+
+func PlotMultiFixedOrderAny(outpre string, ylim []float64, args any) error {
+	return PlotMultiFixedOrder(outpre, ylim)
 }
 
 func UnmarshalJsonOut(jsonOut any, dest any) error {
@@ -61,6 +68,24 @@ func PlotMultiPrettyAny(outpre string, ylim []float64, args any) error {
 		return err
 	}
 	return PlotMultiPretty(outpre, ylim, cfg)
+}
+
+func PlotMultiPrettyBlueAny(outpre string, ylim []float64, args any) error {
+	var cfg PrettyCfg
+	err := UnmarshalJsonOut(args, &cfg)
+	if err != nil {
+		return err
+	}
+	return PlotMultiPrettyBlue(outpre, ylim, cfg)
+}
+
+func PlotMultiPrettyColorseriesAny(outpre string, ylim []float64, args any) error {
+	var cfg PrettyCfg
+	err := UnmarshalJsonOut(args, &cfg)
+	if err != nil {
+		return err
+	}
+	return PlotMultiPrettyColorseries(outpre, ylim, cfg)
 }
 
 func PlotMultiFacetAny(outpre string, ylim []float64, args any) error {
@@ -165,6 +190,34 @@ plot_self_vs_pair_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" 
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
+func PlotSelfVsPairPrettyFixed(outpre string, ylim []float64, args any) error {
+	var a PlotSelfVsPairArgs
+	err := UnmarshalJsonOut(args, &a)
+	if err != nil { return fmt.Errorf("PlotSelfVsPairLim: %w", err) }
+
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_self_vs_pair_pretty_fixed "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		a.Xmin,
+		a.Xmax,
+		a.Ylab,
+		a.Xlab,
+		a.Width,
+		a.Height,
+		a.ResScale,
+		a.TextSize,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
 
 func PosLess(p1, p2 Pos) bool {
 	if p1.Chr < p2.Chr {
@@ -238,6 +291,11 @@ type Entry struct {
 	Val float64
 }
 
+type Sentry struct {
+	Span
+	Val string
+}
+
 type PosEntry struct {
 	Pos
 	Val float64
@@ -260,6 +318,14 @@ func InitNaNSl(length int) []float64 {
 	out := make([]float64, length, length)
 	for i:=0; i<length; i++ {
 		out[i] = math.NaN()
+	}
+	return out
+}
+
+func InitEmptyStringSl(length int) []string {
+	out := make([]string, length, length)
+	for i:=0; i<length; i++ {
+		out[i] = ""
 	}
 	return out
 }
@@ -307,7 +373,7 @@ func CombineToOneLine(rs []io.Reader, args any) ([]io.Reader, error) {
 	return []io.Reader{out}, nil
 }
 
-func CollectEntriesDumb(posmap map[Span][]float64, idx, nidx int, r io.Reader) error {
+func CollectEntriesDumb(posmap map[Span][]string, idx, nidx int, r io.Reader) error {
 	s := bufio.NewScanner(r)
 	s.Buffer([]byte{}, 1e12)
 	for s.Scan() {
@@ -317,7 +383,7 @@ func CollectEntriesDumb(posmap map[Span][]float64, idx, nidx int, r io.Reader) e
 		}
 		vals, ok := posmap[entry.Span]
 		if !ok {
-			vals = InitNaNSl(nidx)
+			vals = InitEmptyStringSl(nidx)
 			posmap[entry.Span] = vals
 		}
 		vals[idx] = entry.Val
@@ -325,15 +391,11 @@ func CollectEntriesDumb(posmap map[Span][]float64, idx, nidx int, r io.Reader) e
 	return nil
 }
 
-func CollectEntryDumb(text string) (Entry, error) {
-	var e Entry
-	var valstr string
+func CollectEntryDumb(text string) (Sentry, error) {
+	var e Sentry
 
-	_, err := fmt.Sscanf(text, "%s	%d	%d	%s", &e.Chr, &e.Start, &e.End, &valstr)
+	_, err := fmt.Sscanf(text, "%s	%d	%d	%s", &e.Chr, &e.Start, &e.End, &e.Val)
 	if err != nil { return e, fmt.Errorf("CollectEntryDumb: line %v: %w", text, err) }
-
-	e.Val, err = strconv.ParseFloat(valstr, 64)
-	if err != nil { e.Val = math.NaN() }
 
 	return e, nil
 }
@@ -344,7 +406,7 @@ func CombineToOneLineDumb(rs []io.Reader, args any) ([]io.Reader, error) {
 	}
 	fmt.Println("CombineToOneLineDumb len(rs):", len(rs))
 
-	posmap := map[Span][]float64{}
+	posmap := map[Span][]string{}
 	for i, r := range rs {
 		err := CollectEntriesDumb(posmap, i, len(rs), r)
 		if err != nil {
@@ -449,6 +511,7 @@ plot_boxwhisker "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
 		a.FillName,
 	)
 
+	fmt.Println(script)
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 

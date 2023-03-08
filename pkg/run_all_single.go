@@ -17,6 +17,7 @@ type AllSingleFlags struct {
 	Threads int
 	WholeGenome bool
 	SelectWins string
+	NoParent bool
 }
 
 func GetAllSingleFlags() AllSingleFlags {

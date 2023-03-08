@@ -1,6 +1,7 @@
 package covplots
 
 import (
+	"math"
 	"os"
 	"io"
 	"strings"
@@ -50,11 +51,28 @@ func GetColSums(cols ...int) func(BedEntry) (float64, error) {
 		sum := 0.0
 		for _, col := range cols {
 			if len(b.Fields) <= col {
-				return 0, fmt.Errorf("GetColFloat: b.Fields %v <= col %v", b.Fields, col)
+				return 0, fmt.Errorf("GetColSums: b.Fields %v <= col %v", b.Fields, col)
 			}
 			f, err := strconv.ParseFloat(b.Fields[col], 64)
 			if err != nil {
-				return 0, fmt.Errorf("GetColFloat: %w", err)
+				return 0, fmt.Errorf("GetColSums: %w", err)
+			}
+			sum += f
+		}
+		return sum, nil
+	}
+}
+
+func MustGetColSums(cols ...int) func(BedEntry) (float64, error) {
+	return func(b BedEntry) (float64, error) {
+		sum := 0.0
+		for _, col := range cols {
+			if len(b.Fields) <= col {
+				return math.NaN(), nil
+			}
+			f, err := strconv.ParseFloat(b.Fields[col], 64)
+			if err != nil {
+				return math.NaN(), nil
 			}
 			sum += f
 		}

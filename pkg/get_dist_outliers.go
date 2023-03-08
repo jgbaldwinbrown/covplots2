@@ -33,8 +33,8 @@ func GetBedEntryLabels(labeller func(BedEntry) string, entries ...BedEntry) []st
 func LabelByDistOutliers(cols, distcols []int, outlierPerc float64, entries []BedEntry, dist []BedEntry) ([]string, error) {
 	h := Handle("LbelByDistOutliers: %w")
 
-	getval := GetColSums(cols...)
-	getdistval := GetColSums(distcols...)
+	getval := MustGetColSums(cols...)
+	getdistval := MustGetColSums(distcols...)
 
 	vals, err := GetBedVals(getdistval, dist...)
 	if err != nil { return nil, h(err) }

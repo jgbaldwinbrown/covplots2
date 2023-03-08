@@ -95,6 +95,9 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 		return nil
 	}
 
+
+	// chrs = []string{"2L", "2R", "3L", "3R"}
+
 	bpused := []int{chrlens[chrs[0]] - chrmins[chrs[0]]}
 	chrnums := make(map[string]int)
 	chrnums[chrs[0]] = 0
@@ -116,7 +119,17 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 		// offsets = append(offsets, offsets[i-1] + chrlens[chrs[i-1]] - chrmins[chrs[i-1] - chrmins[chrs[i]])
 		chroffs[chr] = bpused[i-1] - chrmins[chr]
 	}
+
+	// chrset := map[string]struct{}{
+	// 	"2L": struct{}{},
+	// 	"2R": struct{}{},
+	// 	"3L": struct{}{},
+	// 	"3R": struct{}{},
+	// }
 	for _, e := range data {
+		// if _, ok := chrset[e.Chr]; !ok {
+		// 	continue
+		// }
 		e.StartOff = chroffs[e.Chr] + e.Start
 		e.EndOff = chroffs[e.Chr] + e.End
 		e.ChrNum = chrnums[e.Chr]

@@ -533,13 +533,29 @@ plot_self_vs_pair_lim <- function(data, path, width, height, res_scale, ymin, ym
 
 plot_self_vs_pair_pretty <- function(data, path, width, height, res_scale, ymin, ymax, xmin, xmax, ylabel, xlabel, textsize) {
 	a = ggplot(data = data) +
-		geom_point(aes(x = VAL1, y=VAL2)) +
+		geom_point(aes(x = VAL1, y=VAL2), size=0.3) +
 		xlab(xlabel) +
 		ylab(ylabel) +
 		theme_bw() +
 		theme(text = element_text(size=textsize)) +
 		lims(x = c(xmin, xmax), y = c(ymin, ymax)) +
 		geom_smooth(aes(x = VAL1, y=VAL2), method = 'lm', se = TRUE)
+
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		print(a)
+	dev.off()
+}
+
+plot_self_vs_pair_pretty_fixed <- function(data, path, width, height, res_scale, ymin, ymax, xmin, xmax, ylabel, xlabel, textsize) {
+	a = ggplot(data = data) +
+		geom_point(aes(x = VAL1, y=VAL2), size = 0.3) +
+		xlab(xlabel) +
+		ylab(ylabel) +
+		theme_bw() +
+		theme(text = element_text(size=textsize)) +
+		lims(x = c(xmin, xmax), y = c(ymin, ymax)) +
+		geom_smooth(aes(x = VAL1, y=VAL2), method = 'lm', se = TRUE) +
+		coord_fixed(ratio = 1)
 
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		print(a)
@@ -592,6 +608,8 @@ plot_cov_multi_facetsc <- function(data, path, width, height, res_scale, medians
 plot_cov_multi_facetsc_names <- function(data, path, width, height, res_scale, medians, scales_y) {
 	print("data head:")
 	print(head(data))
+	print("scales:")
+	print(scales_y)
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		a = ggplot(data = data) +
 		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(LABEL))) +
@@ -629,23 +647,50 @@ plot_cov_multi_facetsc_x <- function(data, path, width, height, res_scale, media
 }
 
 plot_cov_multi_pretty <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab) {
-	print("ylimmin:")
-	print(ylimmin)
-	print("ylimmax:")
-	print(ylimmax)
-	print("width:")
-	print(width)
-	print("height:")
-	print(height)
-	print("xlab:")
-	print(xlab)
-	print("ylab:")
-	print(ylab)
-	print("res_scale:")
-	print(res_scale)
-	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+	ascale = 1.5
+	png(path, width = width * res_scale * ascale, height = height * res_scale * ascale, res = res_scale)
 		a = ggplot(data = data) +
 		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab(xlab) +
+		ylab(ylab) +
+		scale_color_discrete(name = "Dataset")+
+		ylim(ylimmin, ylimmax) +
+		theme_bw() +
+		theme(text = element_text(size=36))
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+		#scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"), name = "Dataset")+
+
+getblue <- function() {
+	#return("#619cff")
+	return("#00bfc4")
+}
+
+plot_cov_multi_pretty_blue <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab) {
+	ascale = 1.5
+	png(path, width = width * res_scale * ascale, height = height * res_scale * ascale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab(xlab) +
+		ylab(ylab) +
+		scale_color_manual(name = "Dataset", values = c(getblue()))+
+		ylim(ylimmin, ylimmax) +
+		theme_bw() +
+		theme(text = element_text(size=36))
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+		#scale_color_manual(values = c(gray(0.5), gray(0), "#EE2222"), name = "Dataset")+
+
+plot_cov_multi_pretty_blue_nolegend <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab) {
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL), color = getblue()) +
 		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
 		xlab(xlab) +
 		ylab(ylab) +
@@ -695,4 +740,38 @@ plot_box_and_whisker <- function(data, pdfpath, pngpath, width, height, res_scal
 	png(pngpath, width = width * res_scale, height = height * res_scale, res = res_scale)
 		print(a)
 	dev.off()
+}
+
+# colorseries_palette = c("#00B0F6", "#A3A500", "#E76BF3", "#F8766D", "#00BF7D")
+# colorseries_names = c("Pure D. melanogaster", "Lhr rescue", "Hmr rescue", "Hybrid 1", "Hybrid 2")
+
+colorseries_palette = c("#00B0F6", "#F8766D", "#00BF7D", "#A3A500", "#E76BF3")
+colorseries_names = c("Pure D. melanogaster", "Hybrid 1", "Hybrid 2", "Lhr rescue", "Hmr rescue")
+
+plot_cov_multi_pretty_colorseries_one <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab, series_names) {
+	data$NAME = factor(data$NAME, levels = series_names)
+
+	a = ggplot(data = data) +
+	geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+	scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+	xlab(xlab) +
+	ylab(ylab) +
+	scale_color_manual(name = "Dataset", values = colorseries_palette)+
+	ylim(ylimmin, ylimmax) +
+	theme_bw() +
+	theme(text = element_text(size=36))
+
+	ascale = 1.5
+	png(path, width = width * res_scale * ascale, height = height * res_scale * ascale, res = res_scale)
+		print(a)
+	dev.off()
+}
+
+plot_cov_multi_pretty_colorseries <- function(data, outpre, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab) {
+	for (i in 1:5) {
+		outpath = paste(outpre, as.character(i), ".png", sep="")
+		series_names = colorseries_names[1:i]
+		mdata = data[data$NAME %in% series_names,]
+		plot_cov_multi_pretty_colorseries_one(mdata, outpath, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab, series_names)
+	}
 }

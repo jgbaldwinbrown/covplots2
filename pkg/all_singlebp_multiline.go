@@ -24,6 +24,7 @@ func GetAllMultiplotFlags() AllSingleFlags {
 	flag.IntVar(&f.WinStep, "s", 1000000, "Sliding window step distance (default = 1000000).")
 	flag.IntVar(&f.Threads, "t", 8, "Threads to run simultaneously")
 	flag.BoolVar(&f.WholeGenome, "g", false, "Generate one plot for the whole genome, no windowing; this overrides all other options")
+	// flag.BoolVar(&f.NoParent, "p", false, "Remove parent names from chromosomes")
 	flag.StringVar(&f.SelectWins, "c", "", "Plot the windows specified in the provided .bed file path; this overrides sliding window options")
 	flag.Parse()
 
@@ -98,6 +99,22 @@ plot_singlebp_multiline_cov %v %v %v %v
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
+func PlotMultiFixedOrder(outpre string, ylim []float64) error {
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_singlebp_multiline_cov_fixed_order %v %v %v %v
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
 	// xlab = args[5]
 	// ylab = args[6]
 
@@ -119,6 +136,48 @@ func PlotMultiPretty(outpre string, ylim []float64, cfg PrettyCfg) error {
 set -e
 
 plot_singlebp_multiline_cov_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		cfg.Xlab,
+		cfg.Ylab,
+		cfg.Width,
+		cfg.Height,
+		cfg.Res,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+func PlotMultiPrettyBlue(outpre string, ylim []float64, cfg PrettyCfg) error {
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_multi_pretty_blue "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		ylim[0],
+		ylim[1],
+		cfg.Xlab,
+		cfg.Ylab,
+		cfg.Width,
+		cfg.Height,
+		cfg.Res,
+	)
+
+	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+}
+
+func PlotMultiPrettyColorseries(outpre string, ylim []float64, cfg PrettyCfg) error {
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_multi_pretty_colorseries "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
 `,
 		fmt.Sprintf("%v_plfmt.bed", outpre),
 		fmt.Sprintf("%v_plotted.png", outpre),
@@ -191,6 +250,10 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "sliding_mean": return SlidingMean
 	case "strip_header": return StripHeader
 	case "strip_header_some": return StripHeaderSome
+	case "subset_dumb": return SubsetDumb
+	case "subset_dumb_some": return SubsetDumbSome
+	case "shell": return Shell
+	case "shell_some": return ShellSome
 	default: return Panic
 	}
 	return Panic
@@ -327,6 +390,19 @@ func GzPath(path string, threads int) error {
 	return cmd.Run()
 }
 
+func StripParent(r io.Reader) (io.Reader, error) {
+	newr := PipeWrite(func(w io.Writer) {
+		s := bufio.NewScanner(r)
+		s.Buffer([]byte{}, 1e12)
+		re := regexp.MustCompile(`^([^_	]*)_([^	])*`)
+		for s.Scan() {
+			line := re.ReplaceAllString(s.Text(), "$1")
+			fmt.Fprintln(w, line)
+		}
+	})
+	return newr, nil
+}
+
 func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
 	var rs []io.Reader
@@ -344,9 +420,17 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 		names = append(names, set.Name)
 	}
 
+	var combined io.Reader
 	combined, err := CombineSinglebpPlots(names, rs...)
 	if err != nil {
 		return fmt.Errorf("Multiplot: during CombineSinglebpPlots: %w", err)
+	}
+
+	if cfg.NoParent {
+		combined, err = StripParent(combined)
+		if err != nil {
+			return fmt.Errorf("Multiplot: during StripParent: %w", err)
+		}
 	}
 
 	err = PlfmtSmall(combined, outpre)
@@ -482,6 +566,7 @@ func MultiplotFullchr(cfg UltimateConfig) error {
 
 func MultiplotSelectWins(cfg UltimateConfig, wins []BedEntry) error {
 	h := Handle("MultiplotSelectWins: %w")
+	fmt.Printf("MultiplotSelectWins: input: %v\n", wins)
 
 	for _, entry := range wins {
 		e := Multiplot(cfg, entry.Chr, int(entry.Start), int(entry.End))
