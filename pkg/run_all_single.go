@@ -36,7 +36,7 @@ func SinglePlot(r io.Reader, outpre, chr string, start, end int) error {
 		return err
 	}
 
-	err = PlfmtSmall(fr, outpre)
+	err = PlfmtSmall(fr, outpre, nil, false)
 	if err != nil {
 		return err
 	}
@@ -196,8 +196,9 @@ type Errors []error
 
 func (e Errors) Error() string {
 	var b strings.Builder
-	for _, err := range e {
-		fmt.Println(&b, err)
+	for i, err := range e {
+		fmt.Fprintf(&b, "Error %v:\n", i)
+		fmt.Fprintln(&b, err)
 	}
 	return b.String()
 }

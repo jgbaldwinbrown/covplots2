@@ -62,12 +62,20 @@ func UnmarshalJsonOut(jsonOut any, dest any) error {
 }
 
 func PlotMultiPrettyAny(outpre string, ylim []float64, args any) error {
+	h := Handle("PlotMultiPrettyAny: %w")
+
 	var cfg PrettyCfg
 	err := UnmarshalJsonOut(args, &cfg)
 	if err != nil {
-		return err
+		return h(err)
 	}
-	return PlotMultiPretty(outpre, ylim, cfg)
+
+	err = PlotMultiPretty(outpre, ylim, cfg)
+	if err != nil {
+		return h(err)
+	}
+
+	return nil
 }
 
 func PlotMultiPrettyBlueAny(outpre string, ylim []float64, args any) error {

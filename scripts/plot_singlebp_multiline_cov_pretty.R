@@ -22,8 +22,9 @@ main <- function() {
 	width = as.numeric(args[7])
 	height = as.numeric(args[8])
 	res = as.numeric(args[9])
+	textsize = as.numeric(args[10])
 
-	plot_cov_multi_pretty(cov, out_path, width, height, res, calc_chrom_labels_string(cov), ymin, ymax, xlab, ylab)
+	plot_cov_multi_pretty(cov, out_path, width, height, res, calc_chrom_labels_string(cov), ymin, ymax, xlab, ylab, textsize)
 }
 
 main()

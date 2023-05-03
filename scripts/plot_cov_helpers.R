@@ -646,7 +646,11 @@ plot_cov_multi_facetsc_x <- function(data, path, width, height, res_scale, media
 		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
 }
 
-plot_cov_multi_pretty <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab) {
+plot_cov_multi_pretty <- function(data, path, width, height, res_scale, medians, ylimmin, ylimmax, xlab, ylab, textsize) {
+	if (textsize == 0) {
+		textsize = 36
+	}
+
 	ascale = 1.5
 	png(path, width = width * res_scale * ascale, height = height * res_scale * ascale, res = res_scale)
 		a = ggplot(data = data) +
@@ -657,7 +661,7 @@ plot_cov_multi_pretty <- function(data, path, width, height, res_scale, medians,
 		scale_color_discrete(name = "Dataset")+
 		ylim(ylimmin, ylimmax) +
 		theme_bw() +
-		theme(text = element_text(size=36))
+		theme(text = element_text(size=textsize))
 		print(a)
 	dev.off()
 		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +

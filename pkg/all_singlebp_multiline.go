@@ -51,7 +51,7 @@ func RunAllMultiplot() {
 
 	err = AllMultiplotParallel(cfg, f.WinSize, f.WinStep, f.Threads, f.WholeGenome, selectWins)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("RunAllMultiplot: %w", err))
 	}
 }
 
@@ -125,9 +125,10 @@ plot_singlebp_multiline_cov_fixed_order %v %v %v %v
 type PrettyCfg struct {
 	Xlab string
 	Ylab string
-	Width int
-	Height int
-	Res int
+	Width float64
+	Height float64
+	Res float64
+	TextSize float64
 }
 
 func PlotMultiPretty(outpre string, ylim []float64, cfg PrettyCfg) error {
@@ -135,7 +136,7 @@ func PlotMultiPretty(outpre string, ylim []float64, cfg PrettyCfg) error {
 		`#!/bin/bash
 set -e
 
-plot_singlebp_multiline_cov_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
+plot_singlebp_multiline_cov_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
 `,
 		fmt.Sprintf("%v_plfmt.bed", outpre),
 		fmt.Sprintf("%v_plotted.png", outpre),
@@ -146,6 +147,7 @@ plot_singlebp_multiline_cov_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v"
 		cfg.Width,
 		cfg.Height,
 		cfg.Res,
+		cfg.TextSize,
 	)
 
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
@@ -247,6 +249,10 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "add": return Add
 	case "gunzip": return Gunzip
 	case "chrgrep": return ChrGrep
+	case "colgrep": return ColGrep
+	case "colgrep_some": return ColGrepSome
+	case "colsed": return ColSed
+	case "colsed_some": return ColSedSome
 	case "sliding_mean": return SlidingMean
 	case "strip_header": return StripHeader
 	case "strip_header_some": return StripHeaderSome
@@ -403,6 +409,19 @@ func StripParent(r io.Reader) (io.Reader, error) {
 	return newr, nil
 }
 
+func GetManualChrs(path string) (chrs []string, err error) {
+	h := Handle("GetManualChrs: %w")
+
+	bed, e := ReadBedPath(path)
+	if e != nil { return nil, h(e) }
+
+	for _, bede := range bed {
+		chrs = append(chrs, bede.Chr)
+	}
+
+	return chrs, nil
+}
+
 func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
 	var rs []io.Reader
@@ -433,7 +452,17 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 		}
 	}
 
-	err = PlfmtSmall(combined, outpre)
+	if len(cfg.ManualChrs) > 0 {
+		err = PlfmtSmall(combined, outpre, cfg.ManualChrs, true)
+	} else if cfg.ManualChrsBedPath != "" {
+		manualChrs, err := GetManualChrs(cfg.ManualChrsBedPath)
+		if err != nil {
+			return fmt.Errorf("Multiplot: during GetManualChrs: %w", err)
+		}
+		err = PlfmtSmall(combined, outpre, manualChrs, true)
+	} else {
+		err = PlfmtSmall(combined, outpre, nil, false)
+	}
 	if err != nil {
 		return fmt.Errorf("Multiplot: during PlfmtSmall: %w", err)
 	}
@@ -627,7 +656,7 @@ func AllMultiplotParallel(cfgs []UltimateConfig, winsize, winstep, threads int, 
 		}
 	}
 	if len(out) > 0 {
-		return out
+		return fmt.Errorf("AllMultiplotParallel: %w", out)
 	}
 
 	fmt.Println("done with parallel")

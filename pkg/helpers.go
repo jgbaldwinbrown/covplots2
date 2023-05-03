@@ -1,6 +1,7 @@
 package covplots
 
 import (
+	"encoding/csv"
 	"strings"
 	"strconv"
 	"regexp"
@@ -39,7 +40,7 @@ type PlfmtEntry struct {
 	EndOff int
 }
 
-func PlfmtSmall(r io.Reader, outpre string) error {
+func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs bool) error {
 	w, err := os.Create(outpre + "_plfmt.bed")
 	if err != nil {
 		return err
@@ -53,6 +54,7 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 	s.Buffer([]byte{}, 1e12)
 	chrlens := make(map[string]int)
 	chrmins := make(map[string]int)
+
 	chrs := []string{}
 
 	for s.Scan() {
@@ -96,7 +98,9 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 	}
 
 
-	// chrs = []string{"2L", "2R", "3L", "3R"}
+	if useManualChrs {
+		chrs = manualChrs
+	}
 
 	bpused := []int{chrlens[chrs[0]] - chrmins[chrs[0]]}
 	chrnums := make(map[string]int)
@@ -120,16 +124,18 @@ func PlfmtSmall(r io.Reader, outpre string) error {
 		chroffs[chr] = bpused[i-1] - chrmins[chr]
 	}
 
-	// chrset := map[string]struct{}{
-	// 	"2L": struct{}{},
-	// 	"2R": struct{}{},
-	// 	"3L": struct{}{},
-	// 	"3R": struct{}{},
-	// }
+	chrset := map[string]struct{}{}
+	if useManualChrs {
+		for _, chr := range chrs {
+			chrset[chr] = struct{}{}
+		}
+	}
 	for _, e := range data {
-		// if _, ok := chrset[e.Chr]; !ok {
-		// 	continue
-		// }
+		if useManualChrs {
+			if _, ok := chrset[e.Chr]; !ok {
+				continue
+			}
+		}
 		e.StartOff = chroffs[e.Chr] + e.Start
 		e.EndOff = chroffs[e.Chr] + e.End
 		e.ChrNum = chrnums[e.Chr]
@@ -322,6 +328,104 @@ func ChrGrepSingle(r io.Reader, re *regexp.Regexp) (io.Reader) {
 			i++
 		}
 		fmt.Fprintf(os.Stderr, "ChrGrep: printed %v of %v lines\n", j, i)
+	})
+	return rout
+}
+
+type ColGrepArgs struct {
+	Col int
+	Pattern string
+}
+
+type ColGrepSomeArgs struct {
+	Files []int
+	Col int
+	Pattern string
+}
+
+func ColGrep(rs []io.Reader, anyargs any) ([]io.Reader, error) {
+	h := Handle("ColGrep: %w")
+
+	fmt.Fprintln(os.Stderr, "one")
+	var args ColGrepArgs
+	err := UnmarshalJsonOut(anyargs, &args)
+
+	if err != nil {
+		return nil, h(err)
+	}
+
+	fmt.Fprintln(os.Stderr, "two")
+	re, err := regexp.Compile(args.Pattern)
+	if err != nil {
+		return nil, fmt.Errorf("ChrGrep: could not compile pattern %v with error %w", args.Pattern, err)
+	}
+
+	fmt.Fprintln(os.Stderr, "three")
+	var outs []io.Reader
+	for _, r := range rs {
+		outs = append(outs, ColGrepSingle(r, args.Col, re))
+	}
+
+	fmt.Fprintln(os.Stderr, "four")
+	return outs, nil
+}
+
+func ColGrepSome(rs []io.Reader, anyargs any) ([]io.Reader, error) {
+	h := Handle("ColGrepSome: %w")
+
+	var args ColGrepSomeArgs
+	err := UnmarshalJsonOut(anyargs, &args)
+
+	if err != nil {
+		return nil, h(err)
+	}
+
+	re, err := regexp.Compile(args.Pattern)
+	if err != nil {
+		return nil, fmt.Errorf("ChrGrep: could not compile pattern %v with error %w", args.Pattern, err)
+	}
+
+	out := make([]io.Reader, len(rs))
+	for i, r := range rs {
+		out[i] = r
+	}
+	for _, ridx := range args.Files {
+		out[ridx] = ColGrepSingle(rs[ridx], args.Col, re)
+	}
+	return out, nil
+}
+
+func ColGrepSingle(r io.Reader, col int, re *regexp.Regexp) (io.Reader) {
+	h := Handle("ColGrepSingle: %w")
+
+	rout := PipeWrite(func(w io.Writer) {
+		cr := csv.NewReader(r)
+		cr.LazyQuotes = true
+		cr.ReuseRecord = true
+		cr.FieldsPerRecord = -1
+		cr.Comma = rune('\t')
+
+		cw := csv.NewWriter(w)
+		cw.Comma = rune('\t')
+		defer cw.Flush()
+
+		i := 0
+		j := 0
+
+		for l, e := cr.Read() ; e != io.EOF; l, e = cr.Read() {
+			if e != nil {
+				panic(h(e))
+			}
+			if len(l) <= col {
+				panic(h(fmt.Errorf("len(l) %v <= col %v", len(l), col)))
+			}
+			if re.MatchString(l[col]) {
+				cw.Write(l)
+				j++
+			}
+			i++
+		}
+		fmt.Fprintf(os.Stderr, "ColGrep: printed %v of %v lines\n", j, i)
 	})
 	return rout
 }

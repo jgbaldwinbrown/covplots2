@@ -23,6 +23,8 @@ type UltimateConfig struct {
 	PlotfuncArgs any `json: "plotfuncargs"`
 	Fullchr bool `json: "fullchr"`
 	NoParent bool `json: "noparent"`
+	ManualChrs []string `json: "manualchrs"`
+	ManualChrsBedPath string `json: "manualchrsbedpath"]`
 }
 
 func ReadUltimateConfig(r io.Reader) ([]UltimateConfig, error) {

@@ -30,7 +30,7 @@ func GetBedEntryLabels(labeller func(BedEntry) string, entries ...BedEntry) []st
 	return out
 }
 
-func LabelByDistOutliers(cols, distcols []int, outlierPerc float64, entries []BedEntry, dist []BedEntry) ([]string, error) {
+func LabelByDistOutliers(cols, distcols []int, outlierPerc, lowOutlierPerc float64, entries []BedEntry, dist []BedEntry) ([]string, error) {
 	h := Handle("LbelByDistOutliers: %w")
 
 	getval := MustGetColSums(cols...)
@@ -39,7 +39,7 @@ func LabelByDistOutliers(cols, distcols []int, outlierPerc float64, entries []Be
 	vals, err := GetBedVals(getdistval, dist...)
 	if err != nil { return nil, h(err) }
 
-	lowthresh, err := stats.Percentile(vals, outlierPerc)
+	lowthresh, err := stats.Percentile(vals, lowOutlierPerc)
 	if err != nil { return nil, h(err) }
 
 	hithresh, err := stats.Percentile(vals, 100.0 - outlierPerc)
@@ -74,6 +74,7 @@ type LabellerArgs struct {
 	TestCols []int
 	TestPath string
 	ThreshPerc float64
+	LowThreshPerc float64
 	DistCols []int
 	DistPath string
 }
@@ -96,11 +97,13 @@ func ReadLabellerFlags() LabellerArgs {
 	var tcstring string
 	var dcstring string
 	var percstring string
+	var lowpercstring string
 	flag.StringVar(&tcstring, "tc", "", "comma-separated columns to filter by")
 	flag.StringVar(&a.TestPath, "tp", "", "test input path")
 	flag.StringVar(&dcstring, "dc", "", "comma-separated columns to establish distribution")
 	flag.StringVar(&a.DistPath, "dp", "", "distribution input path")
 	flag.StringVar(&percstring, "p", "", "Percent to keep")
+	flag.StringVar(&lowpercstring, "lp", "", "Lower percent to keep (if different from high)")
 	flag.Parse()
 
 	if a.TestPath == "" { panic(fmt.Errorf("missing -tp")) }
@@ -115,6 +118,14 @@ func ReadLabellerFlags() LabellerArgs {
 		panic(fmt.Errorf("Could not parse stdev %v", percstring))
 	}
 
+	a.LowThreshPerc = a.ThreshPerc
+	if lowpercstring != "" {
+		a.LowThreshPerc, err = strconv.ParseFloat(lowpercstring, 64)
+		if err != nil {
+			panic(fmt.Errorf("Could not parse stdev %v", percstring))
+		}
+	}
+
 	return a
 }
 
@@ -127,7 +138,7 @@ func FullLabelOutliers() error {
 	distEntries, err := ReadPathBed(args.DistPath)
 	if err != nil { return err }
 
-	labels, err := LabelByDistOutliers(args.TestCols, args.DistCols, args.ThreshPerc, testEntries, distEntries)
+	labels, err := LabelByDistOutliers(args.TestCols, args.DistCols, args.ThreshPerc, args.LowThreshPerc, testEntries, distEntries)
 	if err != nil { return err }
 
 	AppendLabels(testEntries, labels)
