@@ -98,3 +98,68 @@ func PlotMultiFacetnameScalesAny(outpre string, ylim []float64, args any) error 
 	return PlotMultiFacetnameScales(outpre, scalespath)
 }
 
+type PlotMultiFacetScalesBoxedArgs struct {
+	Scales string
+	Boxes string
+}
+
+func PlfmtPath(inpath, outpre string) error {
+	h := func(e error) error {
+		return fmt.Errorf("PlfmtPath: %w")
+	}
+
+	r, err := os.Open(inpath)
+	if err != nil {
+		return h(err)
+	}
+	defer r.Close()
+
+	err = PlfmtSmall(r, outpre, nil, false)
+	if err != nil {
+		return h(err)
+	}
+	return nil
+}
+
+func PlotMultiFacetScalesBoxed(outpre string, args PlotMultiFacetScalesBoxedArgs) error {
+	h := func(e error) error {
+		return fmt.Errorf("PlotMultiFacetScalesBoxed: %w", e)
+	}
+
+	boxpre := fmt.Sprintf("%v_boxes", outpre)
+	boxpath := fmt.Sprintf("%v_boxes_plfmt.bed", outpre)
+	err := PlfmtPath(args.Boxes, boxpre)
+	if err != nil {
+		return h(err)
+	}
+
+	fmt.Fprintf(os.Stderr, "running PlotMultiFacetScales\n")
+	fmt.Fprintf(os.Stderr, "PlotMultiFacetScales scalespath: %v\n", args.Scales);
+	script := fmt.Sprintf(
+		`#!/bin/bash
+set -e
+
+plot_singlebp_multiline_cov_facetscales %v %v %v
+`,
+		fmt.Sprintf("%v_plfmt.bed", outpre),
+		fmt.Sprintf("%v_plotted.png", outpre),
+		args.Scales,
+		boxpath,
+	)
+
+	err = shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+	if err != nil {
+		return h(err)
+	}
+	return nil
+}
+
+func PlotMultiFacetScalesBoxedAny(outpre string, ylim []float64, args any) error {
+	var args2 PlotMultiFacetScalesBoxedArgs
+	err := UnmarshalJsonOut(args, &args2)
+	if err != nil {
+		return fmt.Errorf("PlotMultiFacetScalesBoxedAny: %w", err)
+	}
+	return PlotMultiFacetScalesBoxed(outpre, args2)
+}
+

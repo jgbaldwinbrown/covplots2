@@ -19,6 +19,7 @@ func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any) erro
 	case "plot_multi_pretty_colorseries": return PlotMultiPrettyColorseriesAny
 	case "plot_multi_facet": return PlotMultiFacetAny
 	case "plot_multi_facet_scales": return PlotMultiFacetScalesAny
+	case "plot_multi_facet_scales_boxed": return PlotMultiFacetScalesBoxedAny
 	case "plot_multi_facetname_scales": return PlotMultiFacetnameScalesAny
 	case "": return PlotMultiAny
 	case "fixedorder": return PlotMultiFixedOrderAny

@@ -17,7 +17,7 @@ main <- function() {
 
 	scales = read_scales(scalespath)
 
-	rect = bed2rect(rectpath)
+	rect = bed2rect_small(rectpath)
 
 	plot_cov_multi_facetsc(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov), scales, rect)
 }

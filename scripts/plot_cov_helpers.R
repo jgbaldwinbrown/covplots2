@@ -442,6 +442,15 @@ bed2rect <- function(path) {
 	return(rect)
 }
 
+bed2rect_small <- function(path) {
+	bed = read_bed_noval(path)
+	rect = data.frame(ymin = rep(-Inf, nrow(bed)),
+		ymax = rep(Inf, nrow(bed)),
+		xmin = bed$cumsum.tmp,
+		xmax = bed$cumsum.tmp2)
+	return(rect)
+}
+
 plot_cov <- function(data, path, width, height, res_scale, medians) {
 	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
 		a = ggplot(data = data) +
