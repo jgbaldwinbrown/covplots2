@@ -158,6 +158,7 @@ func GetCols(r io.Reader, cols []int) io.Reader {
 			}
 			fmt.Fprintln(w, strings.Join(colvals, "\t"))
 			// fmt.Fprintf(os.Stderr, "GetCols output: %s\n", strings.Join(colvals, "\t"))
+			i++
 		}
 		fmt.Printf("GetCols lines: %v\n", i)
 	})

@@ -9,9 +9,10 @@ import (
 
 func ParseEntry(line string) (Entry, error) {
 	var e Entry
+	// fmt.Fprintf(os.Stderr, "line: |%v|\n", line)
 	_, err := fmt.Sscanf(line, "%s	%d	%d	%f", &e.Chr, &e.Start, &e.End, &e.Val)
 	if err != nil {
-		return Entry{}, fmt.Errorf("ParsePosVal: %w", err)
+		return Entry{}, fmt.Errorf("ParsePosVal: %w; line: |%v|", err, line)
 	}
 	return e, nil
 }
@@ -21,6 +22,12 @@ func DumbSubtractInternal(r1, r2 io.Reader) (map[Span]SubVal, error) {
 	s1 := bufio.NewScanner(r1)
 	s1.Buffer([]byte{}, 1e12)
 	for s1.Scan() {
+		if s1.Err() != nil {
+			return nil, fmt.Errorf("DumbSubtractInternal: s1 error: %w", s1.Err())
+		}
+		if s1.Text() == "" {
+			continue
+		}
 		e, err := ParseEntry(s1.Text())
 		if err != nil {
 			return nil, fmt.Errorf("DumbSubtractInternal: %w", err)
@@ -31,7 +38,13 @@ func DumbSubtractInternal(r1, r2 io.Reader) (map[Span]SubVal, error) {
 	s2 := bufio.NewScanner(r2)
 	s2.Buffer([]byte{}, 1e12)
 	for s2.Scan() {
-		e2, err := ParseEntry(s1.Text())
+		if s2.Err() != nil {
+			return nil, fmt.Errorf("DumbSubtractInternal: s2 error: %w", s2.Err())
+		}
+		if s2.Text() == "" {
+			continue
+		}
+		e2, err := ParseEntry(s2.Text())
 		if err != nil {
 			return nil, fmt.Errorf("DumbSubtractInternal: %w", err)
 		}

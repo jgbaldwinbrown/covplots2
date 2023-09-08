@@ -260,6 +260,18 @@ func GetFunc(fstr string) func(rs []io.Reader, args any) ([]io.Reader, error) {
 	case "subset_dumb_some": return SubsetDumbSome
 	case "shell": return Shell
 	case "shell_some": return ShellSome
+	case "hic_ovl_cols": return HicOvlColumns
+	case "hic_ovl_cols_some": return HicOvlColumnsSome
+	case "hic_nonovl_cols": return HicNonovlColumns
+	case "hic_nonovl_cols_some": return HicNonovlColumnsSome
+	case "hic_nonovl_prop_cols": return HicNonovlPropColumns
+	case "hic_nonovl_prop_cols_some": return HicNonovlPropColumnsSome
+	case "hic_nonovl_prop_fpkm_cols": return HicNonovlPropFpkmColumns
+	case "hic_nonovl_prop_fpkm_cols_some": return HicNonovlPropFpkmColumnsSome
+	case "hic_ovl_prop_cols": return HicOvlPropColumns
+	case "hic_ovl_prop_cols_some": return HicOvlPropColumnsSome
+	case "hic_ovl_prop_fpkm_cols": return HicOvlPropFpkmColumns
+	case "hic_ovl_prop_fpkm_cols_some": return HicOvlPropFpkmColumnsSome
 	default: return Panic
 	}
 	return Panic
@@ -357,7 +369,7 @@ func MultiplotInputSet(cfg InputSet, chr string, start, end int, fullchr bool) (
 		}
 		if err != nil {
 			CloseAny(closers...)
-			return nil, nil, fmt.Errorf("error when running %v: %w", funcstr, err)
+			return nil, nil, fmt.Errorf("error when running %v: %w; paths: %v", funcstr, err, cfg.Paths)
 		}
 	}
 	if len(frs) != 1 {

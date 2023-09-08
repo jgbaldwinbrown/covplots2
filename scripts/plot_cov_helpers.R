@@ -605,6 +605,28 @@ plot_cov_multi_facetsc <- function(data, path, width, height, res_scale, medians
 		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
 }
 
+plot_cov_multi_facetsc_boxed <- function(data, path, width, height, res_scale, medians, scales_y, rect) {
+	print("rect:")
+	print(rect)
+	print("data head:")
+	print(head(data))
+	png(path, width = width * res_scale, height = height * res_scale, res = res_scale)
+		a = ggplot(data = data) +
+		geom_rect(data = rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = "#5555DD", color = "#5555DD", alpha = 0.3) +
+		geom_point(aes(x = (cumsum.tmp + cumsum.tmp2) / 2, y = VAL, color = factor(NAME))) +
+		scale_x_continuous(breaks = medians$median.x, labels = medians$chrom) +
+		xlab("Chromosome") +
+		ylab("Value") +
+		scale_color_discrete(name = "Dataset")+
+		theme_bw() +
+		theme(text = element_text(size=24)) +
+		facet_grid_sc(factor(FACET, levels=names(scales_y))~., scales=list(y=scales_y))
+
+		print(a)
+	dev.off()
+		#geom_point(aes(x = cumsum.tmp, y = VAL, color = factor(NAME))) +
+}
+
 plot_cov_multi_facetsc_names <- function(data, path, width, height, res_scale, medians, scales_y) {
 	print("data head:")
 	print(head(data))
