@@ -434,11 +434,21 @@ func GetManualChrs(path string) (chrs []string, err error) {
 	return chrs, nil
 }
 
+type MultiplotPlotFuncArgs struct {
+	Plformatter *Plformatter
+	Cfg UltimateConfig
+	Chr string
+	Start int
+	End int
+	Fullchr bool
+}
+
 func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 	outpre := fmt.Sprintf("%s_%v_%v_%v", cfg.Outpre, chr, start, end)
 	var rs []io.Reader
+	fullchr := cfg.Fullchr || chr == "full_genome"
 	for _, set := range cfg.InputSets {
-		r, closers, err := MultiplotInputSet(set, chr, start, end, cfg.Fullchr || chr == "full_genome")
+		r, closers, err := MultiplotInputSet(set, chr, start, end, fullchr)
 		if err != nil {
 			return fmt.Errorf("Multiplot: during MultiplotInputSet: %w", err)
 		}
@@ -464,16 +474,18 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 		}
 	}
 
+	var pf *Plformatter
+
 	if len(cfg.ManualChrs) > 0 {
-		err = PlfmtSmall(combined, outpre, cfg.ManualChrs, true)
+		pf, err = PlfmtSmall(combined, outpre, cfg.ManualChrs, true)
 	} else if cfg.ManualChrsBedPath != "" {
 		manualChrs, err := GetManualChrs(cfg.ManualChrsBedPath)
 		if err != nil {
 			return fmt.Errorf("Multiplot: during GetManualChrs: %w", err)
 		}
-		err = PlfmtSmall(combined, outpre, manualChrs, true)
+		pf, err = PlfmtSmall(combined, outpre, manualChrs, true)
 	} else {
-		err = PlfmtSmall(combined, outpre, nil, false)
+		pf, err = PlfmtSmall(combined, outpre, nil, false)
 	}
 	if err != nil {
 		return fmt.Errorf("Multiplot: during PlfmtSmall: %w", err)
@@ -484,8 +496,18 @@ func Multiplot(cfg UltimateConfig, chr string, start, end int) error {
 		ylim = cfg.Ylim
 	}
 
+	mPlotFuncArgs := MultiplotPlotFuncArgs{
+		Plformatter: pf,
+		Cfg: cfg,
+		Chr: chr,
+		Start: start,
+		End: end,
+		Fullchr: fullchr,
+	}
+
 	plotfunc := GetPlotFunc(cfg.Plotfunc)
-	err = plotfunc(outpre, ylim, cfg.PlotfuncArgs)
+
+	err = plotfunc(outpre, ylim, cfg.PlotfuncArgs, mPlotFuncArgs)
 	if err != nil {
 		return fmt.Errorf("Multiplot: during plotfunc: %w", err)
 	}

@@ -11,7 +11,7 @@ import (
 	"fmt"
 )
 
-func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any) error {
+func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	switch fstr {
 	case "plot_multi": return PlotMultiAny
 	case "plot_multi_pretty": return PlotMultiPrettyAny
@@ -35,16 +35,16 @@ func GetPlotFunc(fstr string) func(outpre string, ylim []float64, args any) erro
 	}
 	return PlotPanic
 }
-func PlotPanic(outpre string, ylim []float64, args any) error {
+func PlotPanic(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	panic(fmt.Errorf("trying to use an unimplemented plot function"))
 	return nil
 }
 
-func PlotMultiAny(outpre string, ylim []float64, args any) error {
+func PlotMultiAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	return PlotMulti(outpre, ylim)
 }
 
-func PlotMultiFixedOrderAny(outpre string, ylim []float64, args any) error {
+func PlotMultiFixedOrderAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	return PlotMultiFixedOrder(outpre, ylim)
 }
 
@@ -62,7 +62,7 @@ func UnmarshalJsonOut(jsonOut any, dest any) error {
 	return nil
 }
 
-func PlotMultiPrettyAny(outpre string, ylim []float64, args any) error {
+func PlotMultiPrettyAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	h := Handle("PlotMultiPrettyAny: %w")
 
 	var cfg PrettyCfg
@@ -79,7 +79,7 @@ func PlotMultiPrettyAny(outpre string, ylim []float64, args any) error {
 	return nil
 }
 
-func PlotMultiPrettyBlueAny(outpre string, ylim []float64, args any) error {
+func PlotMultiPrettyBlueAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	var cfg PrettyCfg
 	err := UnmarshalJsonOut(args, &cfg)
 	if err != nil {
@@ -88,7 +88,7 @@ func PlotMultiPrettyBlueAny(outpre string, ylim []float64, args any) error {
 	return PlotMultiPrettyBlue(outpre, ylim, cfg)
 }
 
-func PlotMultiPrettyColorseriesAny(outpre string, ylim []float64, args any) error {
+func PlotMultiPrettyColorseriesAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	var cfg PrettyCfg
 	err := UnmarshalJsonOut(args, &cfg)
 	if err != nil {
@@ -97,11 +97,11 @@ func PlotMultiPrettyColorseriesAny(outpre string, ylim []float64, args any) erro
 	return PlotMultiPrettyColorseries(outpre, ylim, cfg)
 }
 
-func PlotMultiFacetAny(outpre string, ylim []float64, args any) error {
+func PlotMultiFacetAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	return PlotMultiFacet(outpre, ylim)
 }
 
-func PlotCovVsPair(outpre string, ylim []float64, args any) error {
+func PlotCovVsPair(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	script := fmt.Sprintf(
 		`#!/bin/bash
 set -e
@@ -117,7 +117,7 @@ plot_cov_vs_pair %v %v %v %v
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func PlotSelfVsPair(outpre string, ylim []float64, args any) error {
+func PlotSelfVsPair(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	script := fmt.Sprintf(
 		`#!/bin/bash
 set -e
@@ -133,7 +133,7 @@ plot_self_vs_pair %v %v %v %v
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func PlotSelfVsPairLim(outpre string, ylim []float64, args any) error {
+func PlotSelfVsPairLim(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	var xlim []float64
 	err := UnmarshalJsonOut(args, &xlim)
 	if err != nil {
@@ -171,7 +171,7 @@ type PlotSelfVsPairArgs struct {
 	TextSize float64
 }
 
-func PlotSelfVsPairPretty(outpre string, ylim []float64, args any) error {
+func PlotSelfVsPairPretty(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	var a PlotSelfVsPairArgs
 	err := UnmarshalJsonOut(args, &a)
 	if err != nil { return fmt.Errorf("PlotSelfVsPairLim: %w", err) }
@@ -199,7 +199,7 @@ plot_self_vs_pair_pretty "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" "%v" 
 	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func PlotSelfVsPairPrettyFixed(outpre string, ylim []float64, args any) error {
+func PlotSelfVsPairPrettyFixed(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	var a PlotSelfVsPairArgs
 	err := UnmarshalJsonOut(args, &a)
 	if err != nil { return fmt.Errorf("PlotSelfVsPairLim: %w", err) }
@@ -447,7 +447,7 @@ type PlotCovHistArgs struct {
 	ResScale float64
 }
 
-func PlotCovHist(outpre string, ylim []float64, args any) error {
+func PlotCovHist(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	h := handle("PlotCovHist: %w")
 
 	var hargs PlotCovHistArgs
@@ -493,7 +493,7 @@ type PlotBoxwhiskerArgs struct {
 	FillName string
 }
 
-func PlotBoxwhisker(outpre string, ylim []float64, args any) error {
+func PlotBoxwhisker(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
 	var a PlotBoxwhiskerArgs
 	err := UnmarshalJsonOut(args, &a)
 	if err != nil { return fmt.Errorf("PlotSelfVsPairLim: %w", err) }

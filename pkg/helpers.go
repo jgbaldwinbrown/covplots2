@@ -40,14 +40,47 @@ type PlfmtEntry struct {
 	EndOff int
 }
 
-func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs bool) error {
-	w, err := os.Create(outpre + "_plfmt.bed")
-	if err != nil {
-		return err
+func SscanfMulti(line []string, fmts []string, ptrs ...any) (n int, err error) {
+	for i, ptr := range ptrs {
+		_, err = fmt.Sscanf(line[i], fmts[i], ptr)
+		if err != nil {
+			return n, err
+		}
+		n++
 	}
-	defer w.Close()
-	bw := bufio.NewWriter(w)
-	defer bw.Flush()
+	return n, nil
+}
+
+type Plformatter struct {
+	UseManualChrs bool
+	Chrset map[string]struct{}
+	Chroffs map[string]int
+	Chrnums map[string]int
+}
+
+func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs bool) (*Plformatter, error) {
+	data, out, err := PlfmtSmallRead(r, manualChrs, useManualChrs)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = PlfmtSmallWrite(outpre, data, out); err != nil {
+			return nil, err
+	}
+	return out, nil
+}
+
+func PlfmtSmallRead(r io.Reader, manualChrs []string, useManualChrs bool) ([]PlfmtEntry, *Plformatter, error) {
+	h := func(e error) ([]PlfmtEntry, *Plformatter, error) {
+		return nil, nil, fmt.Errorf("PlfmtSmallRead: %w", e)
+	}
+
+	out := &Plformatter {
+		UseManualChrs: useManualChrs,
+		Chrset: map[string]struct{}{},
+		Chroffs: map[string]int{},
+		Chrnums: map[string]int{},
+	}
 
 	data := []PlfmtEntry{}
 	s := bufio.NewScanner(r)
@@ -58,19 +91,21 @@ func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs b
 	chrs := []string{}
 
 	for s.Scan() {
+		if s.Err() != nil {
+			return h(s.Err())
+		}
+
 		line := strings.Split(s.Text(), "\t")
 		if len(line) < 3 {
 			continue
 		}
-		start, err := strconv.ParseInt(line[1], 0, 64)
+
+		entry := PlfmtEntry{Chr: line[0], Text: s.Text(), Line: line}
+		_, err := SscanfMulti(line[1:3], []string{"%d", "%d"}, &entry.Start, &entry.End)
 		if err != nil {
 			continue
 		}
-		end, err := strconv.ParseInt(line[2], 0, 64)
-		if err != nil {
-			continue
-		}
-		entry := PlfmtEntry{Chr: line[0], Start: int(start), End: int(end), Text: s.Text(), Line: line}
+
 		length, ok := chrlens[entry.Chr]
 		if !ok {
 			chrlens[entry.Chr] = 0
@@ -94,7 +129,7 @@ func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs b
 	}
 
 	if len(chrs) < 1 {
-		return nil
+		return data, out, nil
 	}
 
 
@@ -103,10 +138,8 @@ func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs b
 	}
 
 	bpused := []int{chrlens[chrs[0]] - chrmins[chrs[0]]}
-	chrnums := make(map[string]int)
-	chrnums[chrs[0]] = 0
-	chroffs := make(map[string]int)
-	chroffs[chrs[0]] = -chrmins[chrs[0]]
+	out.Chrnums[chrs[0]] = 0
+	out.Chroffs[chrs[0]] = -chrmins[chrs[0]]
 
 	/*
 	idx	start	end	fstart	fend	offset
@@ -117,29 +150,49 @@ func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs b
 
 	for i:=1; i<len(chrs); i++ {
 		chr := chrs[i]
-		chrnums[chr] = i
+		out.Chrnums[chr] = i
 
 		bpused = append(bpused, bpused[i-1] + chrlens[chr] - chrmins[chr])
 		// offsets = append(offsets, offsets[i-1] + chrlens[chrs[i-1]] - chrmins[chrs[i-1] - chrmins[chrs[i]])
-		chroffs[chr] = bpused[i-1] - chrmins[chr]
+		out.Chroffs[chr] = bpused[i-1] - chrmins[chr]
 	}
 
-	chrset := map[string]struct{}{}
 	if useManualChrs {
 		for _, chr := range chrs {
-			chrset[chr] = struct{}{}
+			out.Chrset[chr] = struct{}{}
 		}
 	}
+
+	return data, out, nil
+}
+
+func PlfmtSmallWrite(outpre string, data []PlfmtEntry, f *Plformatter) error {
+	h := func(e error) error {
+		return fmt.Errorf("PlfmtSmallWrite: %w", e)
+	}
+
+	w, err := os.Create(outpre + "_plfmt.bed")
+	if err != nil {
+		return h(err)
+	}
+	defer w.Close()
+	bw := bufio.NewWriter(w)
+	defer bw.Flush()
+
+
 	for _, e := range data {
-		if useManualChrs {
-			if _, ok := chrset[e.Chr]; !ok {
+		if f.UseManualChrs {
+			if _, ok := f.Chrset[e.Chr]; !ok {
 				continue
 			}
 		}
-		e.StartOff = chroffs[e.Chr] + e.Start
-		e.EndOff = chroffs[e.Chr] + e.End
-		e.ChrNum = chrnums[e.Chr]
-		fmt.Fprintf(bw, "%s\t%d\t%d\t%d\n", e.Text, e.ChrNum, e.StartOff, e.EndOff)
+		e.StartOff = f.Chroffs[e.Chr] + e.Start
+		e.EndOff = f.Chroffs[e.Chr] + e.End
+		e.ChrNum = f.Chrnums[e.Chr]
+
+		if _, err := fmt.Fprintf(bw, "%s\t%d\t%d\t%d\n", e.Text, e.ChrNum, e.StartOff, e.EndOff); err != nil {
+			return h(err)
+		}
 	}
 	return nil
 }

@@ -49,6 +49,9 @@ chmod +x ~/mybin/plot_singlebp_multiline_cov_facet
 cp scripts/plot_singlebp_multiline_cov_facetscales.R ~/mybin/plot_singlebp_multiline_cov_facetscales
 chmod +x ~/mybin/plot_singlebp_multiline_cov_facetscales
 
+cp scripts/plot_singlebp_multiline_cov_facetscales_boxed.R ~/mybin/plot_singlebp_multiline_cov_facetscales_boxed
+chmod +x ~/mybin/plot_singlebp_multiline_cov_facetscales_boxed
+
 cp scripts/plot_cov_helpers.R ~/rlibs
 
 cp scripts/plot_cov_vs_pair.R ~/mybin/plot_cov_vs_pair

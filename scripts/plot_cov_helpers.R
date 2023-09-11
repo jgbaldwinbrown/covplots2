@@ -218,6 +218,17 @@ read_2_col <- function(inpath, nlog) {
 # for reading bed format files with only the minimum columns
 read_bed_noval <- function(inpath) {
 	giant = as.data.frame(fread(inpath), header=FALSE)
+	if (ncol(giant) == 0) {
+		giant = data.frame(
+			character(),
+			numeric(),
+			numeric(),
+			numeric(),
+			numeric(),
+			numeric(),
+			stringsAsFactors = FALSE
+		)
+	}
 	colnames(giant) = c("chrom", "BP1", "BP", "CHR", "cumsum.tmp", "cumsum.tmp2")
 	return(giant)
 }

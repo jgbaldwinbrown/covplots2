@@ -36,13 +36,11 @@ func SinglePlot(r io.Reader, outpre, chr string, start, end int) error {
 		return err
 	}
 
-	err = PlfmtSmall(fr, outpre, nil, false)
-	if err != nil {
+	if _, err = PlfmtSmall(fr, outpre, nil, false); err != nil {
 		return err
 	}
 
-	err = PlotSingle(outpre, false)
-	if err != nil {
+	if err = PlotSingle(outpre, false); err != nil {
 		return err
 	}
 	return nil

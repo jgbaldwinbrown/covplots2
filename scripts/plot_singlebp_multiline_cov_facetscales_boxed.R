@@ -17,9 +17,16 @@ main <- function() {
 
 	scales = read_scales(scalespath)
 
+	print(paste("getting rect from path:", rectpath))
 	rect = bed2rect_small(rectpath)
+	print("got rect")
 
-	plot_cov_multi_facetsc(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov), scales, rect)
+	if (nrow(rect) > 0) {
+		plot_cov_multi_facetsc_boxed(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov), scales, rect)
+	} else {
+		plot_cov_multi_facetsc(cov, out_path, 20, 8, 300, calc_chrom_labels_string(cov), scales)
+	}
+	print("plotted")
 }
 
 main()
