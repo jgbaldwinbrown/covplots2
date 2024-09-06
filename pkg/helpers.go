@@ -250,73 +250,21 @@ func GetFlags() Flags {
 	return f
 }
 
-type Filterer struct {
-	s *bufio.Scanner
-	buf *bytes.Buffer
-	filt func(string) bool
-}
-
-func (f *Filterer) Read(out []byte) (n int, err error) {
-	n, err = f.buf.Read(out)
-	for n < len(out) {
-		if !f.s.Scan() {
-			return n, io.EOF
-		}
-		if f.filt(f.s.Text()) {
-			f.buf.WriteString(f.s.Text() + "\n")
-		}
-		var n2 int
-		n2, err = f.buf.Read(out[n:])
-		n += n2
-	}
-	// fmt.Printf("writing %v chars\n", n)
-	return n, err
-}
-
-func Filter(r io.Reader, chr string, start, end int) (*Filterer, error) {
-	re, err := regexp.Compile("^" + chr + "_")
+func Filter[B fastats.BedHeader](it iter.Seq[B], chr string, start, end int) (iter.Seq[B], error) {
+	re, err := regexp.Compile("^" + chr + "_|$")
 	if err != nil {
 		return nil, err
 	}
-
-	f := new(Filterer)
-	f.s = bufio.NewScanner(r)
-	f.buf = bytes.NewBuffer([]byte{})
-
-	var line []string
-	splitter := lscan.ByByte('\t')
-	f.filt = func(s string) bool {
-		line = lscan.SplitByFunc(line, s, splitter)
-		if len(line) < 3 {
-			return false
-		}
-		if !re.MatchString(line[0]) {
-			return false
-		}
-
-		if end != -1 {
-			lstart, err := strconv.ParseInt(line[1], 0, 64)
-			if err != nil {
-				return false
+	return func(y func(B) bool) {
+		for b := range it {
+			if !re.MatchString(b.SpanChr()) || b.SpanStart() >= end || b.SpanEnd() < start {
+				continue
 			}
-			if int(lstart) >= end {
-				return false
+			if !y(b) {
+				return
 			}
 		}
-
-		if start != -1 {
-			lend, err := strconv.ParseInt(line[2], 0, 64)
-			if err != nil {
-				return false
-			}
-			if int(lend) <= start {
-				return false
-			}
-		}
-
-		return true
-	}
-	return f, nil
+	}, nil
 }
 
 func ReChr(rs []io.Reader, abiolines any) ([]io.Reader, error) {
@@ -347,53 +295,19 @@ func ReChrSingle(r io.Reader, biolines []string) (io.Reader) {
 	return rout
 }
 
-func ChrGrep(rs []io.Reader, apattern any) ([]io.Reader, error) {
-	pattern, ok := apattern.(string)
-	if !ok {
-		return nil, fmt.Errorf("pattern %v not of type string", apattern)
-	}
-
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("ChrGrep: could not compile pattern %v with error %w", pattern, err)
-	}
-
-	var outs []io.Reader
-	for _, r := range rs {
-		outs = append(outs, ChrGrepSingle(r, re))
-	}
-	return outs, nil
-}
-
-func ChrGrepSingle(r io.Reader, re *regexp.Regexp) (io.Reader) {
-	chrre := regexp.MustCompile(`^[^	]*`)
-	s := bufio.NewScanner(r)
-	s.Buffer([]byte{}, 1e12)
-	rout := PipeWrite(func(w io.Writer) {
-		i := 0
-		j := 0
-		for s.Scan() {
-			chrstr := chrre.FindString(s.Text())
-			if re.MatchString(chrstr) {
-				fmt.Fprintln(w, s.Text())
-				j++
+func ChrGrepSingle[B fastats.BedEnter](it iter.Seq[B], re *regexp.Regexp) iter.Seq[B] {
+	return func(y func(B) bool) {
+		for b := range it {
+			if re.MatchString(b.SpanChr()) {
+				if !y(b) {
+					return
+				}
 			}
-			i++
 		}
-		fmt.Fprintf(os.Stderr, "ChrGrep: printed %v of %v lines\n", j, i)
-	})
-	return rout
+	}
 }
 
-type ColGrepArgs struct {
-	Col int
-	Pattern string
-}
-
-type ColGrepSomeArgs struct {
-	Files []int
-	Col int
-	Pattern string
+func FieldGrep[B fastats.BedEnter[[]string]](it iter.Seq[B], col int, re *regex.Regexp) iter.Seq[B] {
 }
 
 func ColGrep(rs []io.Reader, anyargs any) ([]io.Reader, error) {
