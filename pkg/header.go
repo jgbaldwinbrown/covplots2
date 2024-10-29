@@ -18,24 +18,3 @@ func StripOneHeader(r io.Reader) io.Reader {
 		}
 	})
 }
-
-
-func StripHeader(rs []io.Reader, args any) ([]io.Reader, error) {
-	var out []io.Reader
-
-	for _, r := range rs {
-		out = append(out, StripOneHeader(r))
-	}
-	return out, nil
-}
-
-func StripHeaderSome(rs []io.Reader, args any) ([]io.Reader, error) {
-	readers := ToIntSlice(args)
-	out := make([]io.Reader, len(rs))
-	copy(out, rs)
-
-	for _, idx := range readers {
-		out[idx] = StripOneHeader(rs[idx])
-	}
-	return out, nil
-}

@@ -6,10 +6,13 @@ import (
 	"bufio"
 	"io"
 	"fmt"
+
+	"github.com/jgbaldwinbrown/csvh"
+	"github.com/jgbaldwinbrown/fastats/pkg"
 )
 
-func GetSpan(text string) (Span, error) {
-	var s Span
+func GetSpan(text string) (fastats.ChrSpan, error) {
+	var s fastats.ChrSpan
 
 	_, err := fmt.Sscanf(text, "%s	%d	%d", &s.Chr, &s.Start, &s.End)
 	if err != nil { return s, fmt.Errorf("GetSpan: line %v: %w", text, err) }
@@ -17,7 +20,7 @@ func GetSpan(text string) (Span, error) {
 	return s, nil
 }
 
-func SubsetDumbOne(r io.Reader, spanmap map[Span]struct{}) (io.Reader, error) {
+func SubsetDumbOne(r io.Reader, spanmap map[fastats.ChrSpan]struct{}) (io.Reader, error) {
 	s := bufio.NewScanner(r)
 	s.Buffer([]byte{}, 1e12)
 	out := PipeWrite(func(w io.Writer) {
@@ -34,14 +37,14 @@ func SubsetDumbOne(r io.Reader, spanmap map[Span]struct{}) (io.Reader, error) {
 	return out, nil
 }
 
-func GetPathSpanMap(path string) (map[Span]struct{}, error) {
-	h := Handle("GetPathSpanMap: %w")
+func GetPathSpanMap(path string) (map[fastats.ChrSpan]struct{}, error) {
+	h := csvh.Handle0("GetPathSpanMap: %w")
 
-	r, e := OpenMaybeGz(path)
+	r, e := csvh.OpenMaybeGzXz(path)
 	if e != nil { return nil, h(e) }
 	defer r.Close()
 
-	m := map[Span]struct{}{}
+	m := map[fastats.ChrSpan]struct{}{}
 
 	s := bufio.NewScanner(r)
 	s.Buffer([]byte{}, 1e12)

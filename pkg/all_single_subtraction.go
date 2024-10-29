@@ -1,12 +1,15 @@
 package covplots
 
 import (
-	"strings"
-	"io"
 	"bufio"
-	"os"
-	"fmt"
 	"flag"
+	"fmt"
+	"io"
+	"iter"
+	"strings"
+
+	"github.com/jgbaldwinbrown/fastats/pkg"
+	"github.com/jgbaldwinbrown/iterh"
 )
 
 func GetAllSubtractSingleFlags() AllSingleFlags {
@@ -28,7 +31,7 @@ func SubtractSinglePlotWinsParallel(cfgs []Config, winsize, winstep, threads int
 
 	errs := make(chan error, len(cfgs))
 
-	for i:=0; i<threads; i++ {
+	for i := 0; i < threads; i++ {
 		go func() {
 			for cfg := range jobs {
 				errs <- SubtractSinglePlotWins(cfg.Inpath, cfg.Inpath2, cfg.Chrlenpath, cfg.Outpre, winsize, winstep)
@@ -37,7 +40,7 @@ func SubtractSinglePlotWinsParallel(cfgs []Config, winsize, winstep, threads int
 	}
 
 	var out Errors
-	for i:=0; i<len(cfgs); i++ {
+	for i := 0; i < len(cfgs); i++ {
 		err := <-errs
 		if err != nil {
 			out = append(out, err)
@@ -48,7 +51,6 @@ func SubtractSinglePlotWinsParallel(cfgs []Config, winsize, winstep, threads int
 	}
 	return nil
 }
-
 
 func RunAllSubtractSinglePlots() {
 	f := GetAllSubtractSingleFlags()
@@ -84,51 +86,44 @@ func SubtractSinglePlotWins(inpath1, inpath2, chrlenpath, outpre string, winsize
 	return nil
 }
 
-
 func SubtractSinglePlotPath(path1, path2 string, outpre, chr string, start, end int) error {
-	r1, err := os.Open(path1)
+	it1, ep1 := iterh.BreakWithError(iterh.PathIter(path1, ParseBedgraph))
+	it2, ep2 := iterh.BreakWithError(iterh.PathIter(path2, ParseBedgraph))
+
+	err := SubtractSinglePlot(it1, it2, outpre, chr, start, end)
 	if err != nil {
 		return fmt.Errorf("SubtractSinglePlotPath: %w", err)
 	}
-	defer r1.Close()
-
-	r2, err := os.Open(path2)
-	if err != nil {
-		return fmt.Errorf("SubtractSinglePlotPath: %w", err)
+	if *ep1 != nil {
+			return *ep1
 	}
-	defer r2.Close()
-
-	err = SubtractSinglePlot(r1, r2, outpre, chr, start, end)
-	if err != nil {
-		return fmt.Errorf("SubtractSinglePlotPath: %w", err)
+	if *ep2 != nil {
+			return *ep2
 	}
 	return nil
 }
 
 type Pos struct {
 	Chr string
-	Bp int
+	Bp  int
 }
 
 type SubVal struct {
-	Val float64
+	Val        float64
 	Subtracted bool
 }
 
-func ParsePosVal(line string, outbuf []PosEntry) ([]PosEntry, error) {
-	outbuf = outbuf[:0]
-	var chr string
-	var start int
-	var end int
-	var v float64
-	_, err := fmt.Sscanf(line, "%s	%d	%d	%f", &chr, &start, &end, &v)
-	if err != nil {
-		return nil, fmt.Errorf("ParsePosVal: %w", err)
+func AllPosVals[B fastats.BedEnter[float64]](b B) iter.Seq[PosEntry] {
+	start := b.SpanStart()
+	end := b.SpanEnd()
+	chr := b.SpanChr()
+	return func(y func(PosEntry) bool) {
+		for i := start; i < end; i++ {
+			if !y(PosEntry{Pos{chr, int(i)}, b.BedFields()}) {
+				return
+			}
+		}
 	}
-	for i:=start; i<end; i++ {
-		outbuf = append(outbuf, PosEntry{Pos{chr, i}, v})
-	}
-	return outbuf, nil
 }
 
 func CollectVals(r io.Reader) (map[Pos]float64, error) {
@@ -144,57 +139,52 @@ func CollectVals(r io.Reader) (map[Pos]float64, error) {
 		if err != nil {
 			return nil, fmt.Errorf("CollectVals: %w", err)
 		}
-		for i:=start; i<end; i++ {
+		for i := start; i < end; i++ {
 			out[Pos{chr, i}] = v
 		}
 	}
 	return out, nil
 }
 
-func SubtractInternal(r1, r2 io.Reader) (map[Pos]SubVal, error) {
+func SubtractInternal[B fastats.BedEnter[float64]](it1, it2 iter.Seq[B]) map[Pos]SubVal {
 	out := map[Pos]SubVal{}
-	s1 := bufio.NewScanner(r1)
-	s1.Buffer([]byte{}, 1e12)
-	var posvals []PosEntry
-	for s1.Scan() {
-		posvals, err := ParsePosVal(s1.Text(), posvals)
-		if err != nil {
-			return nil, fmt.Errorf("SubtractInternal: %w", err)
-		}
-		for _, pv := range posvals {
+	for b := range it1 {
+		posvals := AllPosVals(b)
+		for pv := range posvals {
 			out[pv.Pos] = SubVal{pv.Val, false}
 		}
 	}
 
-	s2 := bufio.NewScanner(r2)
-	s2.Buffer([]byte{}, 1e12)
-	for s2.Scan() {
-		posvals, err := ParsePosVal(s2.Text(), posvals)
-		if err != nil {
-			return nil, fmt.Errorf("SubtractInternal: %w", err)
-		}
-		for _, pv2 := range posvals {
+	for b := range it2 {
+		posvals := AllPosVals(b)
+		for pv2 := range posvals {
 			if sv1, ok := out[pv2.Pos]; ok {
 				out[pv2.Pos] = SubVal{sv1.Val - pv2.Val, true}
 			}
 		}
 	}
-	return out, nil
+	return out
 }
 
-func Subtract(r1, r2 io.Reader) (*strings.Reader, error) {
-	sub, err := SubtractInternal(r1, r2)
-	if err != nil {
-		return nil, fmt.Errorf("Subtract: %w", err)
-	}
+func Subtract[B fastats.BedEnter[float64]](it1, it2 iter.Seq[B]) iter.Seq[fastats.BedEntry[float64]] {
+	return func(y func(fastats.BedEntry[float64]) bool) {
+		sub := SubtractInternal(it1, it2)
 
-	var out strings.Builder
-	for pos, sval := range sub {
-		if sval.Subtracted {
-			fmt.Fprintf(&out, "%s\t%d\t%d\t%f\n", pos.Chr, pos.Bp, pos.Bp+1, sval.Val)
+		for pos, sval := range sub {
+			if sval.Subtracted {
+				be := fastats.BedEntry[float64]{
+					ChrSpan: fastats.ChrSpan{
+						Span: fastats.Span{Start: int64(pos.Bp), End: int64(pos.Bp + 1)},
+						Chr:  pos.Chr,
+					},
+					Fields: sval.Val,
+				}
+				if !y(be) {
+					return
+				}
+			}
 		}
 	}
-	return strings.NewReader(out.String()), nil
 }
 
 func SubtractOld(r1, r2 io.Reader) (*strings.Reader, error) {
@@ -220,7 +210,7 @@ func SubtractOld(r1, r2 io.Reader) (*strings.Reader, error) {
 	return strings.NewReader(out.String()), nil
 }
 
-func SubtractSinglePlot(r1, r2 io.Reader, outpre, chr string, start, end int) error {
+func SubtractSinglePlot(r1, r2 iter.Seq[fastats.BedEntry[float64]], outpre, chr string, start, end int) error {
 	fr1, err := Filter(r1, chr, start, end)
 	if err != nil {
 		return err
@@ -231,20 +221,26 @@ func SubtractSinglePlot(r1, r2 io.Reader, outpre, chr string, start, end int) er
 		return err
 	}
 
-	fr3, err := Subtract(fr1, fr2)
+	fr3 := Subtract(fr1, fr2)
+	fr4 := func(y func(fastats.BedEntry[[]string]) bool) {
+		for b := range fr3 {
+			b2 := fastats.BedEntry[[]string]{}
+			b2.ChrSpan = b.ChrSpan
+			b2.Fields = []string{fmt.Sprintf("%v", b.Fields)}
+			if !y(b2) {
+				return
+			}
+		}
+	}
+
+	_, err = PlfmtSmall(fr4, outpre, nil, false)
 	if err != nil {
 		return err
 	}
 
-	_, err = PlfmtSmall(fr3, outpre, nil, false)
-	if err != nil {
-		return err
-	}
-
-	err = PlotSingle(outpre, true)
+	err = PlotSingle(outpre)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-

@@ -1,11 +1,15 @@
 package covplots
 
 import (
-	"github.com/jgbaldwinbrown/shellout/pkg"
 	"os"
 	"fmt"
 	"bufio"
 	"io"
+	"iter"
+
+	"github.com/jgbaldwinbrown/fastats/pkg"
+	"github.com/jgbaldwinbrown/iterh"
+	"github.com/jgbaldwinbrown/shellout/pkg"
 )
 
 func AddFacetToOneReader(r io.Reader, facetname string) (io.Reader) {
@@ -20,26 +24,15 @@ func AddFacetToOneReader(r io.Reader, facetname string) (io.Reader) {
 	return out
 }
 
-func AddFacet(rs []io.Reader, args any) ([]io.Reader, error) {
-	var out []io.Reader
-	anysl, ok := args.([]any)
-	if !ok {
-		return nil, fmt.Errorf("AddFacet: input args %v not []any", args)
-	}
-
-	var facetnames []string
-	for _, arg := range anysl {
-		name, ok := arg.(string)
-		if !ok {
-			return nil, fmt.Errorf("AddFacet: input arg %v not string", arg)
+func AddFacet(r iter.Seq[fastats.BedEntry[[]string]], facetname string) iter.Seq[fastats.BedEntry[[]string]] {
+	return func(y func(fastats.BedEntry[[]string]) bool) {
+		for b := range r {
+			b.Fields = append(b.Fields, facetname)
+			if !y(b) {
+				return
+			}
 		}
-		facetnames = append(facetnames, name)
 	}
-
-	for i, r := range rs {
-		out = append(out, AddFacetToOneReader(r, facetnames[i]))
-	}
-	return out, nil
 }
 
 func PlotMultiFacetScales(outpre string, scalespath string) error {
@@ -56,7 +49,7 @@ plot_singlebp_multiline_cov_facetscales %v %v %v
 		scalespath,
 	)
 
-	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+	return shellout.ShellPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
 func PlotMultiFacetScalesAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
@@ -84,7 +77,7 @@ plot_singlebp_multiline_cov_facetname_scales %v %v %v
 		scalespath,
 	)
 
-	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+	return shellout.ShellPiped(script, os.Stdin, os.Stdout, os.Stderr)
 }
 
 func PlotMultiFacetnameScalesAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
@@ -104,37 +97,25 @@ type PlotMultiFacetScalesBoxedArgs struct {
 }
 
 func PlfmtPath(inpath, outpre string, margs MultiplotPlotFuncArgs) error {
-	h := func(e error) error {
-		return fmt.Errorf("PlfmtPath: %w", e)
-	}
-
-	fp, err := os.Open(inpath)
-	if err != nil {
-		return h(err)
-	}
-	defer fp.Close()
-	var r io.Reader = fp
+	it := iterh.PathIter(inpath, fastats.ParseBedFlat)
+	it2, errp := iterh.BreakWithError(it)
 
 	if !margs.Fullchr {
-		r2, err := FilterMulti(margs.Chr, margs.Start, margs.End, r)
+		var err error
+		it2, err = Filter(it2, margs.Chr, margs.Start, margs.End)
 		if err != nil {
-			return h(err)
+			return err
 		}
-		if len(r2) != 1 {
-			return h(err)
+		if *errp != nil {
+			return *errp
 		}
-		defer CloseAny(r2[0])
-		r = r2[0]
 	}
 
-
-	data, _, err := PlfmtSmallRead(r, nil, false)
-	if err != nil {
-		return h(err)
+	if err := PlfmtSmallWrite(outpre, it2, margs.Plformatter); err != nil {
+		return err
 	}
-
-	if err = PlfmtSmallWrite(outpre, data, margs.Plformatter); err != nil {
-		return h(err)
+	if *errp != nil {
+		return *errp
 	}
 	return nil
 }
@@ -166,19 +147,9 @@ plot_singlebp_multiline_cov_facetscales_boxed %v %v %v %v
 		boxpath,
 	)
 
-	err = shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+	err = shellout.ShellPiped(script, os.Stdin, os.Stdout, os.Stderr)
 	if err != nil {
 		return h(err)
 	}
 	return nil
 }
-
-func PlotMultiFacetScalesBoxedAny(outpre string, ylim []float64, args any, margs MultiplotPlotFuncArgs) error {
-	var args2 PlotMultiFacetScalesBoxedArgs
-	err := UnmarshalJsonOut(args, &args2)
-	if err != nil {
-		return fmt.Errorf("PlotMultiFacetScalesBoxedAny: %w", err)
-	}
-	return PlotMultiFacetScalesBoxed(outpre, args2, margs)
-}
-

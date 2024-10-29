@@ -1,6 +1,7 @@
 package covplots
 
 import (
+	"iter"
 	"strings"
 	"strconv"
 	"bufio"
@@ -8,6 +9,9 @@ import (
 	"os"
 	"io"
 	"fmt"
+
+	"github.com/jgbaldwinbrown/fastats/pkg"
+	"github.com/jgbaldwinbrown/iterh"
 )
 
 type AllSingleFlags struct {
@@ -30,7 +34,7 @@ func GetAllSingleFlags() AllSingleFlags {
 	return f
 }
 
-func SinglePlot(r io.Reader, outpre, chr string, start, end int) error {
+func SinglePlot(r iter.Seq[fastats.BedEntry[[]string]], outpre, chr string, start, end int) error {
 	fr, err := Filter(r, chr, start, end)
 	if err != nil {
 		return err
@@ -40,7 +44,7 @@ func SinglePlot(r io.Reader, outpre, chr string, start, end int) error {
 		return err
 	}
 
-	if err = PlotSingle(outpre, false); err != nil {
+	if err = PlotSingle(outpre); err != nil {
 		return err
 	}
 	return nil
@@ -53,9 +57,13 @@ func SinglePlotPath(path string, outpre, chr string, start, end int) error {
 	}
 	defer r.Close()
 
-	err = SinglePlot(r, outpre, chr, start, end)
+	it, errp := iterh.BreakWithError(iterh.PathIter(path, fastats.ParseBedFlat))
+	err = SinglePlot(it, outpre, chr, start, end)
 	if err != nil {
 		return fmt.Errorf("SinglePlotPath: %w", err)
+	}
+	if *errp != nil {
+		return fmt.Errorf("SinglePlotPath: %w", *errp)
 	}
 	return nil
 }
@@ -202,16 +210,6 @@ func (e Errors) Error() string {
 }
 
 func SinglePlotWinsParallel(cfgs []Config, winsize, winstep, threads int) error {
-	// if threads == 1 {
-	// 	for _, cfg := range cfgs {
-	// 		err := SinglePlotWins(cfg.Inpath, cfg.Chrlenpath, cfg.Outpre, winsize, winstep)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// 	return nil
-	// }
-
 	jobs := make(chan Config, len(cfgs))
 	for _, cfg := range cfgs {
 		jobs <- cfg

@@ -2,75 +2,35 @@ package covplots
 
 import (
 	"strconv"
-	"bufio"
-	"github.com/jgbaldwinbrown/lscan/pkg"
-	"io"
-	"fmt"
 	"math"
+	"iter"
+
+	"github.com/jgbaldwinbrown/fastats/pkg"
 )
 
-func Log10(rs []io.Reader, args any) ([]io.Reader, error) {
-	return OneArgArithMulti(rs, math.Log10), nil
+func Log10[B fastats.BedEnter[float64]](r iter.Seq[B]) iter.Seq[fastats.BedEntry[float64]] {
+	return OneArgArith(r, math.Log10)
 }
 
-func Abs(rs []io.Reader, args any) ([]io.Reader, error) {
-	return OneArgArithMulti(rs, math.Abs), nil
+func Abs[B fastats.BedEnter[float64]](r iter.Seq[B]) iter.Seq[fastats.BedEntry[float64]] {
+	return OneArgArith(r, math.Abs)
 }
 
-func Add(rs []io.Reader, args any) ([]io.Reader, error) {
-	return TwoArgArithMulti(rs, func(x, y float64) float64 { return x + y }), nil
+func Add[B fastats.BedEnter[Tuple2[float64, float64]]](r iter.Seq[B]) iter.Seq[fastats.BedEntry[float64]] {
+	return TwoArgArith(r, func(x, y float64) float64 { return x + y })
 }
 
-func OneArgArithMulti(rs []io.Reader, f func(float64) float64) []io.Reader {
-	var out []io.Reader
-	for _, r := range rs {
-		outr := OneArgArith(r, f)
-		out = append(out, outr)
-	}
-	return out
-}
-
-func OneArgArith(r io.Reader, f func(float64) float64) io.Reader {
-	return PipeWrite(func(w io.Writer) {
-		fmt.Printf("running Log10 internal func\n")
-		var line []string
-		split := lscan.ByByte('\t')
-
-		s := bufio.NewScanner(r)
-		s.Buffer([]byte{}, 1e12)
-		i := 0
-		for s.Scan() {
-			line = lscan.SplitByFunc(line, s.Text(), split)
-			var val float64
-			if len(line) < 3 {
-				continue
+func OneArgArith[B fastats.BedEnter[float64]](r iter.Seq[B], f func(float64) float64) iter.Seq[fastats.BedEntry[float64]] {
+	return func(y func(fastats.BedEntry[float64]) bool) {
+		for b := range r {
+			var ent fastats.BedEntry[float64]
+			ent.ChrSpan = fastats.ToChrSpan(b)
+			ent.Fields = f(b.BedFields())
+			if !y(ent) {
+				return
 			}
-			if len(line) < 4 {
-				val = math.NaN()
-			} else {
-				var err error
-				val, err = strconv.ParseFloat(line[3], 64)
-				if err != nil {
-					val = math.NaN()
-				} else {
-					val = f(val)
-				}
-			}
-
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", line[0], line[1], line[2], val)
-			i++
 		}
-		fmt.Printf("OneArgArith lines: %v\n", i)
-	})
-}
-
-func TwoArgArithMulti(rs []io.Reader, f func(float64, float64) float64) []io.Reader {
-	var out []io.Reader
-	for _, r := range rs {
-		outr := TwoArgArith(r, f)
-		out = append(out, outr)
 	}
-	return out
 }
 
 func AlwaysParseFloat(str string) float64 {
@@ -81,33 +41,20 @@ func AlwaysParseFloat(str string) float64 {
 	return val
 }
 
-func TwoArgArith(r io.Reader, f func(float64, float64) float64) io.Reader {
-	return PipeWrite(func(w io.Writer) {
-		fmt.Printf("running Log10 internal func\n")
-		var line []string
-		split := lscan.ByByte('\t')
+type Tuple2[T, U any] struct {
+	V0 T
+	V1 U
+}
 
-		s := bufio.NewScanner(r)
-		s.Buffer([]byte{}, 1e12)
-		i := 0
-		for s.Scan() {
-			line = lscan.SplitByFunc(line, s.Text(), split)
-			var val0, val1, outval float64
-			if len(line) < 3 {
-				continue
+func TwoArgArith[B fastats.BedEnter[Tuple2[float64, float64]]](r iter.Seq[B], f func(float64, float64) float64) iter.Seq[fastats.BedEntry[float64]] {
+	return func(y func(fastats.BedEntry[float64]) bool) {
+		for b := range r {
+			var ent fastats.BedEntry[float64]
+			ent.ChrSpan = fastats.ToChrSpan(b)
+			ent.Fields = f(b.BedFields().V0, b.BedFields().V1)
+			if !y(ent) {
+				return
 			}
-			if len(line) < 5 {
-				val0 = math.NaN()
-				val1 = math.NaN()
-			} else {
-				val0 = AlwaysParseFloat(line[3])
-				val1 = AlwaysParseFloat(line[4])
-			}
-			outval = f(val0, val1)
-
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", line[0], line[1], line[2], outval)
-			i++
 		}
-		fmt.Printf("TwoArgArith lines: %v\n", i)
-	})
+	}
 }

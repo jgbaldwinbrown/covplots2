@@ -1,159 +1,119 @@
 package covplots
 
 import (
-	"encoding/csv"
-	"strings"
-	"strconv"
-	"regexp"
+	"slices"
+	"os/exec"
 	"bufio"
-	"bytes"
+	"encoding/csv"
 	"flag"
-	"os"
-	"github.com/jgbaldwinbrown/lscan/pkg"
-	"github.com/jgbaldwinbrown/shellout/pkg"
-	"io"
 	"fmt"
+	"io"
+	"iter"
+	"os"
+	"regexp"
+	"strings"
+
+	"github.com/jgbaldwinbrown/csvh"
+	"github.com/jgbaldwinbrown/fastats/pkg"
+	"github.com/jgbaldwinbrown/iterh"
 )
 
-func Plfmt(r io.Reader, outpre, chrbedpath string) error {
-	script := fmt.Sprintf(
-		`#!/bin/bash
-set -e
-
-plfmt_flex -c 0 -b 1 -b2 2 -C %v -n > %v
-`,
-		chrbedpath,
-		fmt.Sprintf("%v_plfmt.bed", outpre),
-)
-
-	return shellout.ShellOutPiped(script, r, os.Stdout, os.Stderr)
+func ParseBedgraphEntry(line string) (fastats.BedEntry[float64], error) {
+	b := fastats.BedEntry[float64]{}
+	l := strings.Split(line, "\t")
+	_, e := csvh.Scan(l, &b.Chr, &b.Start, &b.End, &b.Fields)
+	return b, e
 }
 
-type PlfmtEntry struct {
-	Chr string
-	Start int
-	End int
-	Text string
-	Line []string
-	ChrNum int
-	StartOff int
-	EndOff int
-}
-
-func SscanfMulti(line []string, fmts []string, ptrs ...any) (n int, err error) {
-	for i, ptr := range ptrs {
-		_, err = fmt.Sscanf(line[i], fmts[i], ptr)
-		if err != nil {
-			return n, err
+func ParseBedgraph(r io.Reader) iter.Seq2[fastats.BedEntry[float64], error] {
+	return func(y func(fastats.BedEntry[float64], error) bool) {
+		s := bufio.NewScanner(r)
+		s.Buffer([]byte{}, 1e12)
+		for s.Scan() {
+			if s.Err() != nil {
+				if !y(fastats.BedEntry[float64]{}, s.Err()) {
+					return
+				}
+			}
+			b, e := ParseBedgraphEntry(s.Text())
+			if !y(b, e) {
+				return
+			}
 		}
-		n++
 	}
-	return n, nil
 }
 
 type Plformatter struct {
 	UseManualChrs bool
-	Chrset map[string]struct{}
-	Chroffs map[string]int
-	Chrnums map[string]int
+	Chrset        map[string]struct{}
+	Chroffs       map[string]int
+	Chrnums       map[string]int
+	Nfields       int
 }
 
-func PlfmtSmall(r io.Reader, outpre string, manualChrs []string, useManualChrs bool) (*Plformatter, error) {
-	data, out, err := PlfmtSmallRead(r, manualChrs, useManualChrs)
-	if err != nil {
-		return nil, err
-	}
+func PlfmtSmall(it iter.Seq[fastats.BedEntry[[]string]], outpath string, manualChrs iter.Seq[string], useManualChrs bool) (*Plformatter, error) {
+	out := PlfmtSmallRead(it, manualChrs, useManualChrs)
 
-	if err = PlfmtSmallWrite(outpre, data, out); err != nil {
-			return nil, err
+	if err := PlfmtSmallWrite(outpath, it, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
-func PlfmtSmallRead(r io.Reader, manualChrs []string, useManualChrs bool) ([]PlfmtEntry, *Plformatter, error) {
-	h := func(e error) ([]PlfmtEntry, *Plformatter, error) {
-		return nil, nil, fmt.Errorf("PlfmtSmallRead: %w", e)
-	}
-
-	out := &Plformatter {
+func PlfmtSmallRead[B fastats.BedEnter[[]string]](it iter.Seq[B], manualChrs iter.Seq[string], useManualChrs bool) *Plformatter {
+	out := &Plformatter{
 		UseManualChrs: useManualChrs,
-		Chrset: map[string]struct{}{},
-		Chroffs: map[string]int{},
-		Chrnums: map[string]int{},
+		Chrset:        map[string]struct{}{},
+		Chroffs:       map[string]int{},
+		Chrnums:       map[string]int{},
 	}
 
-	data := []PlfmtEntry{}
-	s := bufio.NewScanner(r)
-	s.Buffer([]byte{}, 1e12)
 	chrlens := make(map[string]int)
 	chrmins := make(map[string]int)
 
 	chrs := []string{}
 
-	for s.Scan() {
-		if s.Err() != nil {
-			return h(s.Err())
-		}
-
-		line := strings.Split(s.Text(), "\t")
-		if len(line) < 3 {
-			continue
-		}
-
-		entry := PlfmtEntry{Chr: line[0], Text: s.Text(), Line: line}
-		_, err := SscanfMulti(line[1:3], []string{"%d", "%d"}, &entry.Start, &entry.End)
-		if err != nil {
-			continue
-		}
-
-		length, ok := chrlens[entry.Chr]
+	for b := range it {
+		length, ok := chrlens[b.SpanChr()]
 		if !ok {
-			chrlens[entry.Chr] = 0
+			chrlens[b.SpanChr()] = 0
 			length = 0
-			chrs = append(chrs, entry.Chr)
+			chrs = append(chrs, b.SpanChr())
 		}
-		if entry.End > length {
-			chrlens[entry.Chr] = entry.End
+		if int(b.SpanEnd()) > length {
+			chrlens[b.SpanChr()] = int(b.SpanEnd())
 		}
 
-		min, ok := chrmins[entry.Chr]
+		cmin, ok := chrmins[b.SpanChr()]
 		if !ok {
-			chrmins[entry.Chr] = entry.Start
-			min = entry.Start
+			chrmins[b.SpanChr()] = int(b.SpanStart())
+			cmin = int(b.SpanStart())
 		}
-		if min > entry.Start {
-			chrmins[entry.Chr] = entry.Start
+		if cmin > int(b.SpanStart()) {
+			chrmins[b.SpanChr()] = int(b.SpanStart())
 		}
-
-		data = append(data, entry)
+		if out.Nfields < len(b.BedFields()) {
+			out.Nfields = len(b.BedFields())
+		}
 	}
 
 	if len(chrs) < 1 {
-		return data, out, nil
+		return out
 	}
 
-
 	if useManualChrs {
-		chrs = manualChrs
+		chrs = slices.Collect(manualChrs)
 	}
 
 	bpused := []int{chrlens[chrs[0]] - chrmins[chrs[0]]}
 	out.Chrnums[chrs[0]] = 0
 	out.Chroffs[chrs[0]] = -chrmins[chrs[0]]
 
-	/*
-	idx	start	end	fstart	fend	offset
-	0	5	30	0	25	-5
-	1	15	20	25	30	25 - 15
-	2	2	4	30	32	30 - 2
-	*/
-
-	for i:=1; i<len(chrs); i++ {
+	for i := 1; i < len(chrs); i++ {
 		chr := chrs[i]
 		out.Chrnums[chr] = i
 
-		bpused = append(bpused, bpused[i-1] + chrlens[chr] - chrmins[chr])
-		// offsets = append(offsets, offsets[i-1] + chrlens[chrs[i-1]] - chrmins[chrs[i-1] - chrmins[chrs[i]])
+		bpused = append(bpused, bpused[i-1]+chrlens[chr]-chrmins[chr])
 		out.Chroffs[chr] = bpused[i-1] - chrmins[chr]
 	}
 
@@ -163,79 +123,71 @@ func PlfmtSmallRead(r io.Reader, manualChrs []string, useManualChrs bool) ([]Plf
 		}
 	}
 
-	return data, out, nil
+	return out
 }
 
-func PlfmtSmallWrite(outpre string, data []PlfmtEntry, f *Plformatter) error {
+func PlfmtSmallWrite(outpath string, it iter.Seq[fastats.BedEntry[[]string]], f *Plformatter) (err error) {
 	h := func(e error) error {
 		return fmt.Errorf("PlfmtSmallWrite: %w", e)
 	}
 
-	w, err := os.Create(outpre + "_plfmt.bed")
+	w, err := os.Create(outpath)
 	if err != nil {
 		return h(err)
 	}
-	defer w.Close()
+	defer func() { csvh.DeferE(&err, w.Close()) }()
 	bw := bufio.NewWriter(w)
-	defer bw.Flush()
+	defer func() { csvh.DeferE(&err, bw.Flush()) }()
 
-
-	for _, e := range data {
+	for b := range it {
 		if f.UseManualChrs {
-			if _, ok := f.Chrset[e.Chr]; !ok {
+			if _, ok := f.Chrset[b.Chr]; !ok {
 				continue
 			}
 		}
-		e.StartOff = f.Chroffs[e.Chr] + e.Start
-		e.EndOff = f.Chroffs[e.Chr] + e.End
-		e.ChrNum = f.Chrnums[e.Chr]
 
-		if _, err := fmt.Fprintf(bw, "%s\t%d\t%d\t%d\n", e.Text, e.ChrNum, e.StartOff, e.EndOff); err != nil {
+		if _, e := fmt.Fprintf(bw, "%v\t%v\t%v", b.Chr, b.Start, b.End); e != nil {
+			return h(e)
+		}
+		for _, field := range b.Fields {
+			if _, e := fmt.Fprintf(bw, "\t%v", field); e != nil {
+				return h(e)
+			}
+		}
+		if len(b.Fields) < f.Nfields {
+			for i := 0; i < f.Nfields - len(b.Fields); i++ {
+				if _, e := fmt.Fprintf(bw, "\t"); e != nil {
+					return h(e)
+				}
+			}
+		}
+		if _, err := fmt.Fprintf(bw, "\t%d\t%d\t%d\n", f.Chrnums[b.Chr], f.Chroffs[b.Chr] + int(b.Start), f.Chroffs[b.Chr] + int(b.End)); err != nil {
 			return h(err)
 		}
 	}
 	return nil
 }
 
-func PlotSingle(outpre string, subtract bool) error {
-	subtxt := ""
-	if subtract {
-		subtxt = "_sub"
-	}
-	script := fmt.Sprintf(
-		`#!/bin/bash
-set -e
-
-plot%s_single_cov %v %v
-`,
-		subtxt,
-		fmt.Sprintf("%v_plfmt.bed", outpre),
-		fmt.Sprintf("%v_plotted.png", outpre),
-	)
-
-	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+func PlotSingle(outpre string) error {
+	cmd := exec.Command("plot_single_cov", fmt.Sprintf("%v_plfmt.bed", outpre), fmt.Sprintf("%v_plotted.png", outpre))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func PlotWin(outpre string) error {
-	script := fmt.Sprintf(
-		`#!/bin/bash
-set -e
-
-plot_window_cov %v %v
-`,
-		fmt.Sprintf("%v_plfmt.bed", outpre),
-		fmt.Sprintf("%v_plotted.png", outpre),
-	)
-
-	return shellout.ShellOutPiped(script, os.Stdin, os.Stdout, os.Stderr)
+	cmd := exec.Command("plot_window_cov", fmt.Sprintf("%v_plfmt.bed", outpre), fmt.Sprintf("%v_plotted.png", outpre))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 type Flags struct {
-	Outpre string
+	Outpre     string
 	Chrbedpath string
-	Chr string
-	Start int
-	End int
+	Chr        string
+	Start      int
+	End        int
 }
 
 func GetFlags() Flags {
@@ -250,14 +202,14 @@ func GetFlags() Flags {
 	return f
 }
 
-func Filter[B fastats.BedHeader](it iter.Seq[B], chr string, start, end int) (iter.Seq[B], error) {
+func Filter[B fastats.ChrSpanner](it iter.Seq[B], chr string, start, end int) (iter.Seq[B], error) {
 	re, err := regexp.Compile("^" + chr + "_|$")
 	if err != nil {
 		return nil, err
 	}
 	return func(y func(B) bool) {
 		for b := range it {
-			if !re.MatchString(b.SpanChr()) || b.SpanStart() >= end || b.SpanEnd() < start {
+			if !re.MatchString(b.SpanChr()) || int(b.SpanStart()) >= end || int(b.SpanEnd()) < start {
 				continue
 			}
 			if !y(b) {
@@ -267,35 +219,21 @@ func Filter[B fastats.BedHeader](it iter.Seq[B], chr string, start, end int) (it
 	}, nil
 }
 
-func ReChr(rs []io.Reader, abiolines any) ([]io.Reader, error) {
-	biolines, ok := abiolines.([]string)
-	if !ok {
-		return nil, fmt.Errorf("abiolines %v not of type []string", abiolines)
-	}
-	var outs []io.Reader
-	for _, r := range rs {
-		outs = append(outs, ReChrSingle(r, biolines))
-	}
-	return outs, nil
-}
-
-func ReChrSingle(r io.Reader, biolines []string) (io.Reader) {
-	chrre := regexp.MustCompile(`^[^	]*`)
-	s := bufio.NewScanner(r)
-	s.Buffer([]byte{}, 1e12)
-	rout := PipeWrite(func(w io.Writer) {
-		for s.Scan() {
-			out := s.Text()
+func ReChr[F any](it iter.Seq[fastats.BedEntry[F]], biolines []string) iter.Seq[fastats.BedEntry[F]] {
+	return func(y func(fastats.BedEntry[F]) bool) {
+		chrre := regexp.MustCompile(`^[^	]*`)
+		for b := range it {
 			for _, l := range biolines {
-				out = chrre.ReplaceAllString(out, `&` + "_" + l)
+				b.Chr = chrre.ReplaceAllString(b.Chr, `&`+"_"+l)
 			}
-			fmt.Println(w, out)
+			if !y(b) {
+				return
+			}
 		}
-	})
-	return rout
+	}
 }
 
-func ChrGrepSingle[B fastats.BedEnter](it iter.Seq[B], re *regexp.Regexp) iter.Seq[B] {
+func ChrGrep[B fastats.ChrSpanner](it iter.Seq[B], re *regexp.Regexp) iter.Seq[B] {
 	return func(y func(B) bool) {
 		for b := range it {
 			if re.MatchString(b.SpanChr()) {
@@ -307,63 +245,20 @@ func ChrGrepSingle[B fastats.BedEnter](it iter.Seq[B], re *regexp.Regexp) iter.S
 	}
 }
 
-func FieldGrep[B fastats.BedEnter[[]string]](it iter.Seq[B], col int, re *regex.Regexp) iter.Seq[B] {
+func FieldGrep[B fastats.BedEnter[[]string]](it iter.Seq[B], col int, re *regexp.Regexp) iter.Seq[B] {
+	return func(y func(B) bool) {
+		for b := range it {
+			if len(b.BedFields()) > col && re.MatchString(b.BedFields()[col]) {
+				if !y(b) {
+					return
+				}
+			}
+		}
+	}
 }
 
-func ColGrep(rs []io.Reader, anyargs any) ([]io.Reader, error) {
-	h := Handle("ColGrep: %w")
-
-	fmt.Fprintln(os.Stderr, "one")
-	var args ColGrepArgs
-	err := UnmarshalJsonOut(anyargs, &args)
-
-	if err != nil {
-		return nil, h(err)
-	}
-
-	fmt.Fprintln(os.Stderr, "two")
-	re, err := regexp.Compile(args.Pattern)
-	if err != nil {
-		return nil, fmt.Errorf("ChrGrep: could not compile pattern %v with error %w", args.Pattern, err)
-	}
-
-	fmt.Fprintln(os.Stderr, "three")
-	var outs []io.Reader
-	for _, r := range rs {
-		outs = append(outs, ColGrepSingle(r, args.Col, re))
-	}
-
-	fmt.Fprintln(os.Stderr, "four")
-	return outs, nil
-}
-
-func ColGrepSome(rs []io.Reader, anyargs any) ([]io.Reader, error) {
-	h := Handle("ColGrepSome: %w")
-
-	var args ColGrepSomeArgs
-	err := UnmarshalJsonOut(anyargs, &args)
-
-	if err != nil {
-		return nil, h(err)
-	}
-
-	re, err := regexp.Compile(args.Pattern)
-	if err != nil {
-		return nil, fmt.Errorf("ChrGrep: could not compile pattern %v with error %w", args.Pattern, err)
-	}
-
-	out := make([]io.Reader, len(rs))
-	for i, r := range rs {
-		out[i] = r
-	}
-	for _, ridx := range args.Files {
-		out[ridx] = ColGrepSingle(rs[ridx], args.Col, re)
-	}
-	return out, nil
-}
-
-func ColGrepSingle(r io.Reader, col int, re *regexp.Regexp) (io.Reader) {
-	h := Handle("ColGrepSingle: %w")
+func ColGrepSingle(r io.Reader, col int, re *regexp.Regexp) io.Reader {
+	h := csvh.Handle0("ColGrepSingle: %w")
 
 	rout := PipeWrite(func(w io.Writer) {
 		cr := csv.NewReader(r)
@@ -379,7 +274,7 @@ func ColGrepSingle(r io.Reader, col int, re *regexp.Regexp) (io.Reader) {
 		i := 0
 		j := 0
 
-		for l, e := cr.Read() ; e != io.EOF; l, e = cr.Read() {
+		for l, e := cr.Read(); e != io.EOF; l, e = cr.Read() {
 			if e != nil {
 				panic(h(e))
 			}
@@ -400,7 +295,11 @@ func ColGrepSingle(r io.Reader, col int, re *regexp.Regexp) (io.Reader) {
 func RunSingle() {
 	f := GetFlags()
 
-	err := SinglePlot(os.Stdin, f.Outpre, f.Chr, f.Start, f.End)
+	it, errp := iterh.BreakWithError(fastats.ParseBedFlat(os.Stdin))
+	err := SinglePlot(it, f.Outpre, f.Chr, f.Start, f.End)
+	if *errp != nil {
+		panic(*errp)
+	}
 	if err != nil {
 		panic(err)
 	}

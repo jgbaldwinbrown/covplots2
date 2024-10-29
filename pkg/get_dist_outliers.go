@@ -1,43 +1,43 @@
 package covplots
 
 import (
+	"slices"
+	"iter"
 	"os"
 	"strings"
 	"flag"
 	"fmt"
 	"strconv"
+
+	"github.com/jgbaldwinbrown/csvh"
+	"github.com/jgbaldwinbrown/iterh"
+	"github.com/jgbaldwinbrown/fastats/pkg"
 	"github.com/montanaflynn/stats"
 )
 
-func ReadPathBed(path string) ([]BedEntry, error) {
-	h := Handle("ReadPathBed: %w")
-
-	r, e := os.Open(path)
-	if e != nil { return nil, h(e) }
-	defer r.Close()
-
-	b, e := ReadBed(r)
-	if e != nil { return nil, h(e) }
-
-	return b, nil
-}
-
-func GetBedEntryLabels(labeller func(BedEntry) string, entries ...BedEntry) []string {
-	var out []string
-	for _, e := range entries {
-		out = append(out, labeller(e))
+func GetBedEntryLabels[B any](labeller func(B) string, entries iter.Seq[B]) iter.Seq[string] {
+	return func(y func(string) bool) {
+		for e := range entries {
+			if !y(labeller(e)) {
+				return
+			}
+		}
 	}
-	return out
 }
 
-func LabelByDistOutliers(cols, distcols []int, outlierPerc, lowOutlierPerc float64, entries []BedEntry, dist []BedEntry) ([]string, error) {
-	h := Handle("LbelByDistOutliers: %w")
+func LabelByDistOutliers(cols, distcols []int, outlierPerc, lowOutlierPerc float64, entries, dist iter.Seq[fastats.BedEntry[[]string]]) (iter.Seq[string], error) {
+	h := csvh.Handle0("LbelByDistOutliers: %w")
 
-	getval := MustGetColSums(cols...)
-	getdistval := MustGetColSums(distcols...)
+	getval := ToBedGraphEntryMustColSum[fastats.BedEntry[[]string]](cols...)
+	getdistval := ToBedGraphEntryMustColSum[fastats.BedEntry[[]string]](distcols...)
 
-	vals, err := GetBedVals(getdistval, dist...)
-	if err != nil { return nil, h(err) }
+	valsit := ToBedGraph(dist, getdistval)
+	valsit2, errp := iterh.BreakWithError(valsit)
+	vals := slices.Collect(iterh.Transform(valsit2, func(b fastats.BedEntry[float64]) float64 {
+		return b.Fields
+	}))
+
+	if *errp != nil { return nil, h(*errp) }
 
 	lowthresh, err := stats.Percentile(vals, lowOutlierPerc)
 	if err != nil { return nil, h(err) }
@@ -45,19 +45,18 @@ func LabelByDistOutliers(cols, distcols []int, outlierPerc, lowOutlierPerc float
 	hithresh, err := stats.Percentile(vals, 100.0 - outlierPerc)
 	if err != nil { return nil, h(err) }
 
-	labeller := func(b BedEntry) string {
+	labeller := func(b fastats.BedEntry[[]string]) string {
 		val, err := getval(b)
 		if err != nil { return "NA" }
-		if val > hithresh { return "high" }
-		if val < lowthresh { return "low" }
+		if val.Fields > hithresh { return "high" }
+		if val.Fields < lowthresh { return "low" }
 		return "mid"
 	}
 
-	return GetBedEntryLabels(labeller, entries...), nil
-	// func Percentile(input Float64Data, percent float64) (percentile float64, err error) {
+	return GetBedEntryLabels(labeller, entries), nil
 }
 
-func AppendLabels(entries []BedEntry, labels []string) error {
+func AppendLabels(entries []fastats.BedEntry[[]string], labels []string) error {
 	if len(labels) != len(entries) {
 		return fmt.Errorf("AppendLabels: len(labels) %v != len(entries) %v", len(labels), len(entries))
 	}
@@ -132,16 +131,16 @@ func ReadLabellerFlags() LabellerArgs {
 func FullLabelOutliers() error {
 	args := ReadLabellerFlags()
 
-	testEntries, err := ReadPathBed(args.TestPath)
+	testEntries, err := iterh.CollectWithError(iterh.PathIter(args.TestPath, fastats.ParseBedFlat))
 	if err != nil { return err }
 
-	distEntries, err := ReadPathBed(args.DistPath)
+	distEntries, err := iterh.CollectWithError(iterh.PathIter(args.DistPath, fastats.ParseBedFlat))
 	if err != nil { return err }
 
-	labels, err := LabelByDistOutliers(args.TestCols, args.DistCols, args.ThreshPerc, args.LowThreshPerc, testEntries, distEntries)
+	labels, err := LabelByDistOutliers(args.TestCols, args.DistCols, args.ThreshPerc, args.LowThreshPerc, slices.Values(testEntries), slices.Values(distEntries))
 	if err != nil { return err }
 
-	AppendLabels(testEntries, labels)
+	AppendLabels(testEntries, slices.Collect(labels))
 
 	err = WriteBedEntries(os.Stdout, testEntries...)
 	if err != nil { return err }

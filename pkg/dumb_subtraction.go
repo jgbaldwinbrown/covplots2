@@ -5,20 +5,22 @@ import (
 	"io"
 	"bufio"
 	"fmt"
+
+	"github.com/jgbaldwinbrown/fastats/pkg"
 )
 
-func ParseEntry(line string) (Entry, error) {
-	var e Entry
+func ParseEntry(line string) (fastats.BedEntry[float64], error) {
+	var e fastats.BedEntry[float64]
 	// fmt.Fprintf(os.Stderr, "line: |%v|\n", line)
-	_, err := fmt.Sscanf(line, "%s	%d	%d	%f", &e.Chr, &e.Start, &e.End, &e.Val)
+	_, err := fmt.Sscanf(line, "%s	%d	%d	%f", &e.Chr, &e.Start, &e.End, &e.Fields)
 	if err != nil {
-		return Entry{}, fmt.Errorf("ParsePosVal: %w; line: |%v|", err, line)
+		return fastats.BedEntry[float64]{}, fmt.Errorf("ParsePosVal: %w; line: |%v|", err, line)
 	}
 	return e, nil
 }
 
-func DumbSubtractInternal(r1, r2 io.Reader) (map[Span]SubVal, error) {
-	out := map[Span]SubVal{}
+func DumbSubtractInternal(r1, r2 io.Reader) (map[fastats.ChrSpan]SubVal, error) {
+	out := map[fastats.ChrSpan]SubVal{}
 	s1 := bufio.NewScanner(r1)
 	s1.Buffer([]byte{}, 1e12)
 	for s1.Scan() {
@@ -32,7 +34,7 @@ func DumbSubtractInternal(r1, r2 io.Reader) (map[Span]SubVal, error) {
 		if err != nil {
 			return nil, fmt.Errorf("DumbSubtractInternal: %w", err)
 		}
-		out[e.Span] = SubVal{e.Val, false}
+		out[e.ChrSpan] = SubVal{e.Fields, false}
 	}
 
 	s2 := bufio.NewScanner(r2)
@@ -48,8 +50,8 @@ func DumbSubtractInternal(r1, r2 io.Reader) (map[Span]SubVal, error) {
 		if err != nil {
 			return nil, fmt.Errorf("DumbSubtractInternal: %w", err)
 		}
-		if sv1, ok := out[e2.Span]; ok {
-			out[e2.Span] = SubVal{sv1.Val - e2.Val, true}
+		if sv1, ok := out[e2.ChrSpan]; ok {
+			out[e2.ChrSpan] = SubVal{sv1.Val - e2.Fields, true}
 		}
 	}
 	return out, nil
