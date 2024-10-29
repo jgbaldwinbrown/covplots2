@@ -203,13 +203,13 @@ func GetFlags() Flags {
 }
 
 func Filter[B fastats.ChrSpanner](it iter.Seq[B], chr string, start, end int) (iter.Seq[B], error) {
-	re, err := regexp.Compile("^" + chr + "_|$")
+	re, err := regexp.Compile("^" + chr + "(_|$)")
 	if err != nil {
 		return nil, err
 	}
 	return func(y func(B) bool) {
 		for b := range it {
-			if !re.MatchString(b.SpanChr()) || int(b.SpanStart()) >= end || int(b.SpanEnd()) < start {
+			if (!re.MatchString(b.SpanChr())) || (int(b.SpanStart()) >= end) || (int(b.SpanEnd()) < start) {
 				continue
 			}
 			if !y(b) {
