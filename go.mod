@@ -1,4 +1,4 @@
-module github.com/jgbaldwinbrown/covplots
+module github.com/jgbaldwinbrown/covplots2
 
 go 1.23.0
 
