@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/jgbaldwinbrown/covplots/pkg"
+	"github.com/jgbaldwinbrown/covplots2/pkg"
 )
 
 func main() {
