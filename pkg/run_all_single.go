@@ -88,8 +88,8 @@ func ParseChrLenSet(line string) (ChrLenSet, error) {
 	}
 
 	chrsplit := strings.Split(sl[0], "_")
-	if len(chrsplit) < 2 {
-		return out, fmt.Errorf("chr field %v less than 2 fields", chrsplit)
+	if len(chrsplit) < 1 {
+		return out, fmt.Errorf("chr field %v less than 1 field", chrsplit)
 	}
 	out.Chr = chrsplit[0]
 	chrlen, err := strconv.ParseInt(sl[2], 0, 64)
